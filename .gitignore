@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+
+.env
+
+.vscode/
+.idea/
+
+~$*
+*.tmp
+
+.DS_Store
+Thumbs.db

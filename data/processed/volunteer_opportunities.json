@@ -1,0 +1,82 @@
+[
+  {
+    "id": "V001",
+    "title": "סיוע בשיעורי בית לילדים",
+    "day": "ראשון",
+    "start_time": "16:00:00",
+    "end_time": "18:00:00",
+    "min_age": 16,
+    "location": "ספרייה",
+    "contact_person": "תמר ניסים"
+  },
+  {
+    "id": "V002",
+    "title": "ליווי קשישים לפעילות בוקר",
+    "day": "שני",
+    "start_time": "09:00:00",
+    "end_time": "11:00:00",
+    "min_age": 18,
+    "location": "כניסה ראשית",
+    "contact_person": "רונית אברהם"
+  },
+  {
+    "id": "V003",
+    "title": "עזרה באירועים קהילתיים",
+    "day": "שלישי",
+    "start_time": "17:00:00",
+    "end_time": "20:00:00",
+    "min_age": 16,
+    "location": "אולם מופעים",
+    "contact_person": "מיכל לוי"
+  },
+  {
+    "id": "V004",
+    "title": "הדרכה בסיסית במחשבים",
+    "day": "רביעי",
+    "start_time": "10:00:00",
+    "end_time": "12:00:00",
+    "min_age": 18,
+    "location": "מעבדת מחשבים",
+    "contact_person": "אמיר חדד"
+  },
+  {
+    "id": "V005",
+    "title": "סידור ספרייה קהילתית",
+    "day": "חמישי",
+    "start_time": "16:00:00",
+    "end_time": "18:00:00",
+    "min_age": 14,
+    "location": "ספרייה",
+    "contact_person": "תמר ניסים"
+  },
+  {
+    "id": "V006",
+    "title": "תמיכה בחוגי ילדים",
+    "day": "שלישי",
+    "start_time": "16:00:00",
+    "end_time": "18:00:00",
+    "min_age": 16,
+    "location": "חדר אומנות",
+    "contact_person": "מיכל לוי"
+  },
+  {
+    "id": "V007",
+    "title": "צילום ותיעוד פעילויות",
+    "day": "חמישי",
+    "start_time": "18:00:00",
+    "end_time": "20:00:00",
+    "min_age": 16,
+    "location": "רחבת המתנ״ס",
+    "contact_person": "דניאל פרץ"
+  },
+  {
+    "id": "V008",
+    "title": "קבלת פנים באירועים",
+    "day": "ראשון",
+    "start_time": "17:00:00",
+    "end_time": "19:00:00",
+    "min_age": 16,
+    "location": "כניסה ראשית",
+    "contact_person": "נעמה ברק"
+  }
+]
