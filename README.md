@@ -4,15 +4,13 @@
 
 ## מה כבר קיים ב-repo
 
-| רכיב | תיאור |
-|--------|--------|
-| `data/raw/community_center_data.xlsx` | שלושה גיליונות: `activities`, `events`, `volunteer_opportunities` |
-| `data/raw/community_center_booklet.docx` | חוברת שנתית בעברית |
-| `data/processed/*.json` | פלט ה-ingestion (ניתן לייצר מחדש מהפקודה למטה) |
-| `ingestion/ingest.py` | קריאת Excel ויצירת JSON |
-| `agent/tools.py` | פונקציות חיפוש לפי שדות (ללא LLM) |
-| `agent/run_agent.py` | הדגמה: שלוש שאלות בעברית ותשובות מתוך הנתונים בלבד |
-| `agent/graph.py` | שמור לשלבים הבאים (LangGraph) — ריק מתוכן לוגי בספרינט 0 |
+- `data/raw/community_center_data.xlsx` — שלושה גיליונות: `activities`, `events`, `volunteer_opportunities`
+- `data/raw/community_center_booklet.docx` — חוברת שנתית בעברית
+- `data/processed/*.json` — פלט ה-ingestion (ניתן לייצר מחדש מהפקודה למטה)
+- `ingestion/ingest.py` — קריאת Excel ויצירת JSON
+- `agent/tools.py` — פונקציות חיפוש לפי שדות (ללא LLM)
+- `agent/run_agent.py` — הדגמה של שלוש שאלות בעברית ותשובות מתוך הנתונים בלבד
+- `agent/graph.py` — שמור לשלבים הבאים (LangGraph) — ריק מתוכן לוגי בספרינט 0
 
 **מספרי רשומות בנתונים:** 30 חוגים, 10 אירועים, 8 הזדמנויות התנדבות.
 
