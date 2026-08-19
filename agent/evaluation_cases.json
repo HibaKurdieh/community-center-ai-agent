@@ -1,0 +1,326 @@
+[
+  {
+    "id": "E01",
+    "description": "פילאטיס ביום שלישי",
+    "query": "אילו חוגי פילאטיס יש ביום שלישי?",
+    "expected": {
+      "intent": "activity",
+      "day": "שלישי",
+      "category_contains": "פילאטיס",
+      "min_results": 1,
+      "must_contain": ["פילאטיס"]
+    }
+  },
+  {
+    "id": "E02",
+    "description": "יום שלישי בערב",
+    "query": "מה יש ביום שלישי בערב?",
+    "expected": {
+      "intent": "activity",
+      "day": "שלישי",
+      "start_after": "17:00",
+      "start_before": "23:59",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E03",
+    "description": "יום שלישי בבוקר",
+    "query": "מה יש ביום שלישי בבוקר?",
+    "expected": {
+      "intent": "activity",
+      "day": "שלישי",
+      "start_after": "06:00",
+      "start_before": "12:00",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E04",
+    "description": "שגיאת כתיב רביעי בבוקר",
+    "query": "מה יש ברבעי בבקר?",
+    "expected": {
+      "intent": "activity",
+      "day": "רביעי",
+      "start_after": "06:00",
+      "start_before": "12:00",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E05",
+    "description": "שגיאת כתיב בתוך משפט",
+    "query": "אני רוצה משהו ביום רבעי בבקר לגברים",
+    "expected": {
+      "day": "רביעי",
+      "start_after": "06:00",
+      "start_before": "12:00",
+      "target_audience": "גם לגברים"
+    }
+  },
+  {
+    "id": "E06",
+    "description": "מרכז הדס",
+    "query": "מה יש במרכז הדס?",
+    "expected": {
+      "intent": "activity",
+      "center_contains": "הדס",
+      "min_results": 1,
+      "must_contain": ["הדס"]
+    }
+  },
+  {
+    "id": "E07",
+    "description": "מרכז מעיין",
+    "query": "אילו חוגים יש במרכז מעיין?",
+    "expected": {
+      "intent": "activity",
+      "center_contains": "מעיין",
+      "min_results": 1,
+      "must_contain": ["מעיין"]
+    }
+  },
+  {
+    "id": "E08",
+    "description": "מדריך משה",
+    "query": "אילו חוגים משה מעביר?",
+    "expected": {
+      "intent": "activity",
+      "instructor_contains": "משה",
+      "min_results": 1,
+      "must_contain": ["משה"]
+    }
+  },
+  {
+    "id": "E09",
+    "description": "נשים ביום שני",
+    "query": "אילו חוגים יש ביום שני לנשים?",
+    "expected": {
+      "intent": "activity",
+      "day": "שני",
+      "target_audience": "נשים",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E10",
+    "description": "גברים ביום שני",
+    "query": "אילו חוגים יש ביום שני לגברים?",
+    "expected": {
+      "intent": "activity",
+      "day": "שני",
+      "target_audience": "גם לגברים",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E11",
+    "description": "גיל 16",
+    "query": "אילו חוגים מתאימים לגיל 16?",
+    "expected": {
+      "intent": "activity",
+      "age": 16,
+      "min_results": 1,
+      "must_contain": ["אימון עצימות גבוהה"]
+    }
+  },
+  {
+    "id": "E12",
+    "description": "גיל 16 ביום שלישי",
+    "query": "אילו חוגים מתאימים לגיל 16 ביום שלישי?",
+    "expected": {
+      "intent": "activity",
+      "age": 16,
+      "day": "שלישי",
+      "min_results": 1,
+      "must_contain": ["אימון עצימות גבוהה"]
+    }
+  },
+  {
+    "id": "E13",
+    "description": "גיל 10 אינו מקבל פעילות מגיל 16",
+    "query": "אילו חוגים מתאימים לגיל 10 ביום שלישי?",
+    "expected": {
+      "intent": "activity",
+      "age": 10,
+      "day": "שלישי",
+      "must_not_contain": ["אימון עצימות גבוהה"]
+    }
+  },
+  {
+    "id": "E14",
+    "description": "פילאטיס בלבד",
+    "query": "אילו חוגי פילאטיס יש?",
+    "expected": {
+      "intent": "activity",
+      "category_contains": "פילאטיס",
+      "min_results": 1,
+      "must_contain": ["פילאטיס"]
+    }
+  },
+  {
+    "id": "E15",
+    "description": "פילאטיס בערב",
+    "query": "אילו חוגי פילאטיס יש בערב?",
+    "expected": {
+      "intent": "activity",
+      "category_contains": "פילאטיס",
+      "start_after": "17:00",
+      "start_before": "23:59",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E16",
+    "description": "פילאטיס בבוקר",
+    "query": "אילו חוגי פילאטיס יש בבוקר?",
+    "expected": {
+      "intent": "activity",
+      "category_contains": "פילאטיס",
+      "start_after": "06:00",
+      "start_before": "12:00",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E17",
+    "description": "פעילויות בערב",
+    "query": "מה יש בערב?",
+    "expected": {
+      "intent": "activity",
+      "start_after": "17:00",
+      "start_before": "23:59",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E18",
+    "description": "פעילויות בבוקר",
+    "query": "מה יש בבוקר?",
+    "expected": {
+      "intent": "activity",
+      "start_after": "06:00",
+      "start_before": "12:00",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E19",
+    "description": "ניסוח טבעי על הבוקר",
+    "query": "מה יש על הבוקר?",
+    "expected": {
+      "intent": "activity",
+      "start_after": "06:00",
+      "start_before": "12:00",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E20",
+    "description": "יום רביעי",
+    "query": "אילו חוגים יש ביום רביעי?",
+    "expected": {
+      "intent": "activity",
+      "day": "רביעי",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E21",
+    "description": "יום שני",
+    "query": "אילו חוגים יש ביום שני?",
+    "expected": {
+      "day": "שני"
+    }
+  },
+  {
+    "id": "E22",
+    "description": "יום חמישי",
+    "query": "אילו חוגים יש ביום חמישי?",
+    "expected": {
+      "day": "חמישי"
+    }
+  },
+  {
+    "id": "E23",
+    "description": "יום ראשון",
+    "query": "אילו חוגים יש ביום ראשון?",
+    "expected": {
+      "day": "ראשון"
+    }
+  },
+  {
+    "id": "E24",
+    "description": "יום שלישי אחרי 18",
+    "query": "מה יש ביום שלישי אחרי 18:00?",
+    "expected": {
+      "intent": "activity",
+      "day": "שלישי",
+      "start_after": "18:00",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E25",
+    "description": "יום שלישי לפני 12",
+    "query": "מה יש ביום שלישי לפני 12:00?",
+    "expected": {
+      "intent": "activity",
+      "day": "שלישי",
+      "start_before": "12:00",
+      "min_results": 1
+    }
+  },
+  {
+    "id": "E26",
+    "description": "מדריך משה ביום",
+    "query": "באילו ימים משה מעביר חוגים?",
+    "expected": {
+      "intent": "activity",
+      "instructor_contains": "משה",
+      "min_results": 1,
+      "must_contain": ["משה"]
+    }
+  },
+  {
+    "id": "E27",
+    "description": "זומבה",
+    "query": "אילו חוגי זומבה יש?",
+    "expected": {
+      "intent": "activity",
+      "category_contains": "זומבה",
+      "min_results": 1,
+      "must_contain": ["זומבה"]
+    }
+  },
+  {
+    "id": "E28",
+    "description": "יוגה",
+    "query": "אילו שיעורי יוגה יש?",
+    "expected": {
+      "intent": "activity",
+      "category_contains": "יוגה",
+      "min_results": 1,
+      "must_contain": ["יוגה"]
+    }
+  },
+  {
+    "id": "E29",
+    "description": "TRX",
+    "query": "איפה יש TRX?",
+    "expected": {
+      "intent": "activity",
+      "category_contains": "TRX",
+      "min_results": 1,
+      "must_contain": ["TRX"]
+    }
+  },
+  {
+    "id": "E30",
+    "description": "שאלה כללית ללא המצאת תשובה",
+    "query": "אני מחפש חוג",
+    "expected": {
+      "allow_clarification": true
+    }
+  }
+]

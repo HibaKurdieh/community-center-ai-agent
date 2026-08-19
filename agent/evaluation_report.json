@@ -1,0 +1,611 @@
+{
+  "summary": {
+    "passed": 30,
+    "failed": 0,
+    "total": 30,
+    "score": 100.0,
+    "total_duration": 38.941
+  },
+  "results": [
+    {
+      "id": "E01",
+      "query": "אילו חוגי פילאטיס יש ביום שלישי?",
+      "passed": true,
+      "duration": 1.461,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": "פילאטיס",
+        "day": "שלישי",
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 3
+      }
+    },
+    {
+      "id": "E02",
+      "query": "מה יש ביום שלישי בערב?",
+      "passed": true,
+      "duration": 1.164,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "שלישי",
+        "start_after": "17:00",
+        "start_before": "23:59",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 7
+      }
+    },
+    {
+      "id": "E03",
+      "query": "מה יש ביום שלישי בבוקר?",
+      "passed": true,
+      "duration": 1.295,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "שלישי",
+        "start_after": "06:00",
+        "start_before": "12:00",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 6
+      }
+    },
+    {
+      "id": "E04",
+      "query": "מה יש ברבעי בבקר?",
+      "passed": true,
+      "duration": 1.325,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "רביעי",
+        "start_after": "06:00",
+        "start_before": "12:00",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 6
+      }
+    },
+    {
+      "id": "E05",
+      "query": "אני רוצה משהו ביום רבעי בבקר לגברים",
+      "passed": true,
+      "duration": 2.802,
+      "failures": [],
+      "observed": {
+        "intent": "unknown",
+        "category": null,
+        "day": "רביעי",
+        "start_after": "06:00",
+        "start_before": "12:00",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": "גם לגברים",
+        "age": null,
+        "waiting_for_clarification": true,
+        "result_count": 0
+      }
+    },
+    {
+      "id": "E06",
+      "query": "מה יש במרכז הדס?",
+      "passed": true,
+      "duration": 1.291,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": "הדס",
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 15
+      }
+    },
+    {
+      "id": "E07",
+      "query": "אילו חוגים יש במרכז מעיין?",
+      "passed": true,
+      "duration": 1.294,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": "מעיין",
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 14
+      }
+    },
+    {
+      "id": "E08",
+      "query": "אילו חוגים משה מעביר?",
+      "passed": true,
+      "duration": 1.086,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": "משה",
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 3
+      }
+    },
+    {
+      "id": "E09",
+      "query": "אילו חוגים יש ביום שני לנשים?",
+      "passed": true,
+      "duration": 1.203,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "שני",
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": "נשים",
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 9
+      }
+    },
+    {
+      "id": "E10",
+      "query": "אילו חוגים יש ביום שני לגברים?",
+      "passed": true,
+      "duration": 1.537,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "שני",
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": "גם לגברים",
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 7
+      }
+    },
+    {
+      "id": "E11",
+      "query": "אילו חוגים מתאימים לגיל 16?",
+      "passed": true,
+      "duration": 1.089,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": 16,
+        "waiting_for_clarification": false,
+        "result_count": 82
+      }
+    },
+    {
+      "id": "E12",
+      "query": "אילו חוגים מתאימים לגיל 16 ביום שלישי?",
+      "passed": true,
+      "duration": 1.033,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "שלישי",
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": 16,
+        "waiting_for_clarification": false,
+        "result_count": 12
+      }
+    },
+    {
+      "id": "E13",
+      "query": "אילו חוגים מתאימים לגיל 10 ביום שלישי?",
+      "passed": true,
+      "duration": 1.17,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "שלישי",
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": 10,
+        "waiting_for_clarification": false,
+        "result_count": 11
+      }
+    },
+    {
+      "id": "E14",
+      "query": "אילו חוגי פילאטיס יש?",
+      "passed": true,
+      "duration": 1.157,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": "פילאטיס",
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 15
+      }
+    },
+    {
+      "id": "E15",
+      "query": "אילו חוגי פילאטיס יש בערב?",
+      "passed": true,
+      "duration": 1.198,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": "פילאטיס",
+        "day": null,
+        "start_after": "17:00",
+        "start_before": "23:59",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 6
+      }
+    },
+    {
+      "id": "E16",
+      "query": "אילו חוגי פילאטיס יש בבוקר?",
+      "passed": true,
+      "duration": 1.001,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": "פילאטיס",
+        "day": null,
+        "start_after": "06:00",
+        "start_before": "12:00",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 9
+      }
+    },
+    {
+      "id": "E17",
+      "query": "מה יש בערב?",
+      "passed": true,
+      "duration": 1.024,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": null,
+        "start_after": "17:00",
+        "start_before": "23:59",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 38
+      }
+    },
+    {
+      "id": "E18",
+      "query": "מה יש בבוקר?",
+      "passed": true,
+      "duration": 1.038,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": null,
+        "start_after": "06:00",
+        "start_before": "12:00",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 45
+      }
+    },
+    {
+      "id": "E19",
+      "query": "מה יש על הבוקר?",
+      "passed": true,
+      "duration": 1.09,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": null,
+        "start_after": "06:00",
+        "start_before": "12:00",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 45
+      }
+    },
+    {
+      "id": "E20",
+      "query": "אילו חוגים יש ביום רביעי?",
+      "passed": true,
+      "duration": 1.164,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "רביעי",
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 13
+      }
+    },
+    {
+      "id": "E21",
+      "query": "אילו חוגים יש ביום שני?",
+      "passed": true,
+      "duration": 1.213,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "שני",
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 18
+      }
+    },
+    {
+      "id": "E22",
+      "query": "אילו חוגים יש ביום חמישי?",
+      "passed": true,
+      "duration": 1.354,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "חמישי",
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 13
+      }
+    },
+    {
+      "id": "E23",
+      "query": "אילו חוגים יש ביום ראשון?",
+      "passed": true,
+      "duration": 1.433,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "ראשון",
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 20
+      }
+    },
+    {
+      "id": "E24",
+      "query": "מה יש ביום שלישי אחרי 18:00?",
+      "passed": true,
+      "duration": 1.106,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "שלישי",
+        "start_after": "18:00",
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 4
+      }
+    },
+    {
+      "id": "E25",
+      "query": "מה יש ביום שלישי לפני 12:00?",
+      "passed": true,
+      "duration": 1.503,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": "שלישי",
+        "start_after": null,
+        "start_before": "12:00",
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 6
+      }
+    },
+    {
+      "id": "E26",
+      "query": "באילו ימים משה מעביר חוגים?",
+      "passed": true,
+      "duration": 1.625,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": "משה",
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 3
+      }
+    },
+    {
+      "id": "E27",
+      "query": "אילו חוגי זומבה יש?",
+      "passed": true,
+      "duration": 1.286,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": "זומבה",
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 6
+      }
+    },
+    {
+      "id": "E28",
+      "query": "אילו שיעורי יוגה יש?",
+      "passed": true,
+      "duration": 1.259,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": "יוגה",
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 9
+      }
+    },
+    {
+      "id": "E29",
+      "query": "איפה יש TRX?",
+      "passed": true,
+      "duration": 1.306,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": "TRX",
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 1
+      }
+    },
+    {
+      "id": "E30",
+      "query": "אני מחפש חוג",
+      "passed": true,
+      "duration": 1.413,
+      "failures": [],
+      "observed": {
+        "intent": "activity",
+        "category": null,
+        "day": null,
+        "start_after": null,
+        "start_before": null,
+        "center_name": null,
+        "instructor": null,
+        "target_audience": null,
+        "age": null,
+        "waiting_for_clarification": false,
+        "result_count": 84
+      }
+    }
+  ]
+}
