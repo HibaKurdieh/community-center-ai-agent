@@ -6,3 +6,4 @@ langchain-openai
 python-dotenv
 python-telegram-bot
 pydantic
+supabase>=2.31.0
