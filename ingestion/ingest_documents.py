@@ -1,6 +1,5 @@
 from __future__ import annotations
-
-import json
+import argparse
 import sys
 from pathlib import Path
 from typing import Any
@@ -13,42 +12,17 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from ingestion.parsers.basic_schedule_parser import (
-    parse_basic_schedule,
+from database.activities_repository import (
+    insert_new_activities,
 )
-from ingestion.parsers.table_schedule_parser import (
-    parse_table_schedule,
+from ingestion.universal_docx_parser import (
+    parse_universal_docx,
 )
-from ingestion.parsers.dirty_schedule_parser import (
-    parse_dirty_schedule,
-)
-from ingestion.parsers.bilingual_schedule_parser import (
-    parse_bilingual_schedule,
-)
-from ingestion.parsers.grouped_schedule_parser import (
-    parse_grouped_schedule,
-)
-from ingestion.parsers.edge_case_schedule_parser import (
-    parse_edge_case_schedule,
-)
-
-
 LECTURER_DATA_DIR = (
     PROJECT_ROOT
     / "data"
     / "raw"
     / "lecturer_samples"
-)
-
-OUTPUT_DIR = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-)
-
-OUTPUT_FILE = (
-    OUTPUT_DIR
-    / "activities_from_lecturer.json"
 )
 
 
@@ -94,54 +68,38 @@ def deduplicate_activities(
 
 def ingest_all_documents() -> list[dict[str, Any]]:
     """
-    מריץ את ה-parser המתאים על כל אחד
-    מששת קבצי המרצה ומאחד את התוצאות.
+    Automatically discovers all DOCX files in the
+    lecturer data directory and processes each one
+    through the universal parser.
+
+    No filename-to-parser mapping is required.
     """
 
-    files_and_parsers = [
-        (
-            "01_מרכז_ספורט_הדס_בסיסי.docx",
-            parse_basic_schedule,
-        ),
-        (
-            "02_מרכז_ספורט_אלונים_טבלה.docx",
-            parse_table_schedule,
-        ),
-        (
-            "03_מרכז_כושר_נופים_מלוכלך.docx",
-            parse_dirty_schedule,
-        ),
-        (
-            "04_Neve_Sport_Center_bilingual.docx",
-            parse_bilingual_schedule,
-        ),
-        (
-            "05_מרכז_ספורט_מעיין_לפי_חוג.docx",
-            parse_grouped_schedule,
-        ),
-        (
-            "06_מרכז_ספורט_גלים_מקרי_קצה.docx",
-            parse_edge_case_schedule,
-        ),
-    ]
+    file_paths = sorted(
+        LECTURER_DATA_DIR.glob("*.docx")
+    )
 
-    all_activities: list[dict[str, Any]] = []
-
-    print("\n=== Document Ingestion Pipeline ===\n")
-
-    for filename, parser in files_and_parsers:
-        file_path = (
-            LECTURER_DATA_DIR
-            / filename
+    if not file_paths:
+        print(
+            "⚠ No DOCX files found."
         )
+        return []
 
-        if not file_path.exists():
-            print(
-                f"⚠ קובץ לא נמצא: {filename}"
-            )
-            continue
+    all_activities: list[
+        dict[str, Any]
+    ] = []
 
-        activities = parser(
+    print(
+        "\n=== Universal Document Ingestion Pipeline ===\n"
+    )
+
+    for file_path in file_paths:
+
+        (
+            activities,
+            parser_name,
+            attempts,
+        ) = parse_universal_docx(
             file_path
         )
 
@@ -150,40 +108,15 @@ def ingest_all_documents() -> list[dict[str, Any]]:
         )
 
         print(
-            f"{filename}: "
-            f"{len(activities)} שיעורים"
+            f"{file_path.name}: "
+            f"{len(activities)} activities "
+            f"| parser={parser_name}"
         )
 
-    unique_activities = deduplicate_activities(
+    return deduplicate_activities(
         all_activities
     )
 
-    return unique_activities
-
-
-def save_activities(
-    activities: list[dict[str, Any]],
-) -> None:
-    """
-    שומר את כל הפעילויות לקובץ JSON אחיד.
-    """
-
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    with open(
-        OUTPUT_FILE,
-        "w",
-        encoding="utf-8",
-    ) as file:
-        json.dump(
-            activities,
-            file,
-            ensure_ascii=False,
-            indent=2,
-        )
 
 
 def print_summary(
@@ -267,11 +200,6 @@ def print_summary(
         missing_location,
     )
 
-    print(
-        "\nנשמר:",
-        OUTPUT_FILE,
-    )
-
 
 def main() -> None:
     if sys.platform == "win32":
@@ -279,19 +207,71 @@ def main() -> None:
             sys.stdout.reconfigure(
                 encoding="utf-8"
             )
-        except (AttributeError, OSError):
+        except (
+            AttributeError,
+            OSError,
+        ):
             pass
 
-    activities = ingest_all_documents()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Universal batch ingestion "
+            "for lecturer DOCX files."
+        )
+    )
 
-    save_activities(
-        activities
+    parser.add_argument(
+        "--save",
+        action="store_true",
+        help=(
+            "Save newly extracted activities "
+            "directly to Supabase."
+        ),
+    )
+
+    args = parser.parse_args()
+
+    activities = (
+        ingest_all_documents()
     )
 
     print_summary(
         activities
     )
 
+    if not args.save:
+        print(
+            "\nDRY RUN: "
+            "Nothing was written to Supabase."
+        )
+        return
+
+    print(
+        "\nSaving to Supabase..."
+    )
+
+    stats = insert_new_activities(
+        activities
+    )
+
+    print(
+        "\n=== Supabase Result ==="
+    )
+
+    print(
+        "Received:",
+        stats["received"],
+    )
+
+    print(
+        "Inserted:",
+        stats["inserted"],
+    )
+
+    print(
+        "Duplicates:",
+        stats["duplicates"],
+    )
 
 if __name__ == "__main__":
     main()
