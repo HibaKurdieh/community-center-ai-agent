@@ -74,7 +74,7 @@ Routing
   ↓
 Search Tools
   ↓
-Processed Activities Data
+Supabase Activities Data
   ↓
 Response Formatting
   ↓
@@ -396,8 +396,7 @@ AgentState מגדיר את מבנה המידע שעובר בין ה-Nodes של L
 
 שכבת הכלים אחראית לחיפוש בפועל.
 
-החיפוש הוא דטרמיניסטי ומתבצע באמצעות פילטרים מובנים.
-
+הפעילויות נטענות מ-Supabase, והחיפוש עצמו הוא דטרמיניסטי ומתבצע באמצעות פילטרים מובנים.
 ניתן לסנן לפי:
 
 - Category
@@ -436,24 +435,30 @@ start_after = 17:00
 עיבוד הנתונים מתבצע בשכבה נפרדת מה-Agent.
 
 ```text
-Source Documents
+DOCX Source Documents
        ↓
 Document Reader
        ↓
-Schedule Parser
+Universal DOCX Parser
        ↓
-Normalization
+Known Deterministic Parsers
        ↓
-Time Inference
+Reliable result?
+  ├── YES → Use selected parser result
+  └── NO  → Generic LLM Parser
+       ↓
+Normalization & Validation
        ↓
 Deduplication
        ↓
-Processed Activity Data
+Supabase
 ```
 
-הפרדה זו חשובה משום שה-Agent אינו צריך לדעת כיצד נראה הקובץ המקורי.
+ה-Agent עובד מול מבנה נתונים אחיד שנשמר ב-Supabase לאחר שלב ה-Ingestion.
 
-ה-Agent עובד מול מבנה נתונים אחיד לאחר שלב ה-Ingestion.
+המערכת אינה תלויה עוד במיפוי ידני בין שם הקובץ ל-Parser.
+היא מנסה את ה-Parsers הדטרמיניסטיים הקיימים ובוחרת את התוצאה האמינה ביותר.
+אם אף Parser מוכר אינו מתאים, המערכת עוברת אוטומטית ל-Generic LLM Parser.
 
 ---
 
@@ -480,6 +485,13 @@ ingestion/parsers/
 ```
 
 כל Parser מטפל בצורה שונה שבה מידע יכול להופיע במסמך.
+ה-Parsers אינם נבחרים לפי שם הקובץ.
+
+`ingestion/universal_docx_parser.py` מריץ את ה-Parsers בצורה בטוחה,
+מדרג את איכות התוצאות ובוחר את התוצאה המתאימה ביותר.
+
+אם אף Parser מוכר אינו מחזיר תוצאה אמינה,
+`ingestion/generic_llm_parser.py` משמש כ-Fallback מבוסס GPT-4o-mini.
 
 ---
 
@@ -503,8 +515,12 @@ ingestion/parsers/
 
 `ingestion/ingest_documents.py`
 
-מריץ את תהליך ה-Ingestion ומייצר את הנתונים המעובדים שבהם משתמש הסוכן.
+מזהה אוטומטית את כל קובצי ה-DOCX בתיקיית המקור,
+מעביר כל מסמך דרך ה-Universal Parser,
+מאחד את הפעילויות ומסיר כפילויות.
 
+ברירת המחדל היא Dry Run.
+בעת שימוש ב-`--save`, פעילויות חדשות נשמרות ישירות ב-Supabase תוך מניעת כפילויות.
 ---
 
 # Project Structure
@@ -556,6 +572,18 @@ community-center-ai-agent/
 │   ├── ingest.py
 │   ├── ingest_documents.py
 │   │   └── Document ingestion pipeline
+│   ├── universal_docx_parser.py
+│   │   └── Automatic parser selection and LLM fallback routing
+│   │
+│   ├── generic_llm_parser.py
+│   │   └── Generic extraction for unknown DOCX structures
+│   │
+│   ├── universal_ingestion.py
+│   │   └── Single-file DOCX ingestion directly to Supabase
+│   │
+│   ├── test_universal_docx_parser.py
+│   │   └── Universal parser regression tests
+│   │
 │   │
 │   ├── normalize.py
 │   │   └── Data normalization
@@ -573,6 +601,18 @@ community-center-ai-agent/
 │       ├── edge_case_schedule_parser.py
 │       ├── grouped_schedule_parser.py
 │       └── table_schedule_parser.py
+├── database/
+│   ├── supabase_client.py
+│   │   └── Supabase connection
+│   │
+│   ├── activities_repository.py
+│   │   └── Activity reads, inserts and duplicate prevention
+│   │
+│   ├── migrate_activities.py
+│   │   └── Legacy one-time JSON-to-Supabase migration
+│   │
+│   └── schema.sql
+│       └── Supabase activities table schema
 │
 ├── data/
 │   ├── raw/
@@ -617,7 +657,7 @@ community-center-ai-agent/
 | pandas | Data processing |
 | openpyxl | Excel processing |
 | python-docx | DOCX processing |
-| JSON | Structured activity storage |
+| Supabase / PostgreSQL | Active activity database and structured storage |
 
 ---
 
@@ -659,6 +699,8 @@ pip install -r requirements.txt
 ```env
 OPENAI_API_KEY=
 TELEGRAM_BOT_TOKEN=
+SUPABASE_URL=
+SUPABASE_SECRET_KEY=
 ```
 
 לאחר מכן יש להזין את הערכים המתאימים בקובץ `.env` המקומי.
@@ -693,13 +735,17 @@ python agent/run_agent.py
 
 ## Data Ingestion
 
-כדי להריץ מחדש את תהליך עיבוד הנתונים:
+כדי להריץ את תהליך ה-Ingestion במצב Dry Run:
 
 ```bash
-python ingestion/ingest_documents.py
+python -m ingestion.ingest_documents
 ```
 
----
+לשמירה ישירה של פעילויות חדשות ב-Supabase:
+
+```bash
+python -m ingestion.ingest_documents --save
+```
 
 # Automated Evaluation
 
@@ -970,7 +1016,6 @@ Evaluation
 - הרחבת Data Validation
 - תמיכה בשפות נוספות
 - הרחבת מקורות הנתונים
-- מעבר ל-Database או Vector Store במידת הצורך
 - Deployment לסביבת Production
 
 ---
@@ -985,11 +1030,12 @@ The system combines:
 - Deterministic Python validation and normalization
 - LangGraph for workflow orchestration
 - Structured search tools for activity retrieval
+- Supabase / PostgreSQL as the active activity database
 - Telegram for conversational interaction
 
 The agent supports follow-up questions, context preservation, clarification, spelling variations, multiple search filters and pagination.
 
-The project also contains an independent data-ingestion pipeline, automated agent evaluation and data-validation tools.
+The project also contains a universal DOCX ingestion pipeline with deterministic parser selection, an LLM fallback for unknown document structures, direct Supabase storage, automated agent evaluation and data-validation tools.
 
 Current quality results:
 
