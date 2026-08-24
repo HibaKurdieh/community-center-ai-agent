@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ingestion.universal_docx_parser import (
-    parse_with_known_parsers,
+    parse_universal_docx,
 )
 
 
@@ -79,7 +79,7 @@ def main() -> None:
             activities,
             selected_parser,
             attempts,
-        ) = parse_with_known_parsers(
+        ) = parse_universal_docx(
             file_path
         )
 

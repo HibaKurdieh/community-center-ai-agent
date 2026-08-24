@@ -1,4 +1,7 @@
 from __future__ import annotations
+from ingestion.generic_llm_parser import (
+    parse_generic_schedule,
+)
 
 import re
 from dataclasses import dataclass
@@ -550,7 +553,65 @@ def parse_with_known_parsers(
         best.parser_name,
         attempts,
     )
+def parse_universal_docx(
+    file_path: Path,
+) -> tuple[
+    list[dict[str, Any]],
+    str,
+    list[ParserAttempt],
+]:
+    """
+    Main universal DOCX parsing entry point.
 
+    1. Try all known deterministic parsers.
+    2. If one produces a reliable result, use it.
+    3. Otherwise automatically fall back to the LLM parser.
+    """
+
+    (
+        activities,
+        parser_name,
+        attempts,
+    ) = parse_with_known_parsers(
+        file_path
+    )
+
+    # --------------------------------------------------
+    # Known deterministic parser succeeded
+    # --------------------------------------------------
+
+    if parser_name is not None:
+        return (
+            activities,
+            parser_name,
+            attempts,
+        )
+
+    # --------------------------------------------------
+    # No known parser was reliable -> LLM fallback
+    # --------------------------------------------------
+
+    print(
+        "\n[universal_docx_parser] "
+        "No reliable known parser found."
+    )
+
+    print(
+        "[universal_docx_parser] "
+        "Using generic LLM fallback..."
+    )
+
+    generic_activities = (
+        parse_generic_schedule(
+            file_path
+        )
+    )
+
+    return (
+        generic_activities,
+        "generic_llm",
+        attempts,
+    )
 
 def print_attempts(
     attempts: list[
@@ -600,7 +661,7 @@ def main() -> None:
         )
 
     activities, parser_name, attempts = (
-        parse_with_known_parsers(
+        parse_universal_docx(
             file_path
         )
     )
