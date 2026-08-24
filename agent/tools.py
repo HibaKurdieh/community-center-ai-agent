@@ -12,128 +12,55 @@
 """
 
 from __future__ import annotations
-
-import json
+from pathlib import Path
 import re
 import sys
 from datetime import datetime, time
 from typing import Any
+CURRENT_FILE = Path(__file__).resolve()
+PROJECT_ROOT = CURRENT_FILE.parents[1]
 
-from paths import PROJECT_ROOT
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-
-_PROCESSED = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
+from database.activities_repository import (
+    get_all_activities,
 )
 
 
-# ---------------------------------------------------------
-# JSON loading
-# ---------------------------------------------------------
-
-def _load_json(
-    name: str,
-    required: bool = True,
-) -> list[dict[str, Any]]:
-    """
-    טוען קובץ JSON מתוך data/processed.
-
-    required=False מאפשר לעבוד גם אם
-    קובץ אופציונלי עדיין לא קיים.
-    """
-
-    path = (
-        _PROCESSED
-        / name
-    )
-
-    if not path.exists():
-
-        if required:
-            raise FileNotFoundError(
-                f"לא נמצא קובץ: {path}"
-            )
-
-        return []
-
-    with open(
-        path,
-        encoding="utf-8",
-    ) as file:
-        data = json.load(
-            file
-        )
-
-    if not isinstance(
-        data,
-        list,
-    ):
-        raise ValueError(
-            f"הקובץ {name} חייב להכיל רשימת רשומות."
-        )
-
-    return data
-
-
-# ---------------------------------------------------------
-# In-memory data
-# ---------------------------------------------------------
-
-# נשמר רק לצורכי testing / evaluation.
 synthetic_activities: list[
     dict[str, Any]
 ] = []
 
-
-# הפעילויות שחולצו מקבצי המרצה.
 lecturer_activities: list[
     dict[str, Any]
 ] = []
 
-
-# זהו מקור הנתונים שבו הסוכן משתמש בפועל.
 activities: list[
     dict[str, Any]
 ] = []
 
-
 def reload_data() -> None:
     """
-    טוען מחדש את קובצי הפעילויות.
+    Reloads activities directly from Supabase.
 
-    חשוב:
-    - synthetic_activities נשמר רק לבדיקה.
-    - lecturer_activities הוא מקור הנתונים האמיתי.
-    - activities מכיל רק את נתוני המרצה.
+    Supabase is the active data source used by the agent.
     """
 
     global synthetic_activities
     global lecturer_activities
     global activities
 
-    synthetic_activities = _load_json(
-        "activities.json",
-        required=False,
-    )
+    synthetic_activities = []
 
-    lecturer_activities = _load_json(
-        "activities_from_lecturer.json",
-        required=True,
+    lecturer_activities = (
+        get_all_activities()
     )
 
     activities = (
         lecturer_activities
     )
-
-
 reload_data()
-
-
-# ---------------------------------------------------------
-# Time helpers
-# ---------------------------------------------------------
 
 def _to_time(
     value: Any,

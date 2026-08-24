@@ -245,3 +245,18 @@ def insert_new_activities(
         "inserted": inserted,
         "duplicates": duplicates,
     }
+def get_all_activities() -> list[dict[str, Any]]:
+    """
+    Reads all activities from Supabase.
+    """
+
+    client = get_supabase_client()
+
+    response = (
+        client.table(TABLE_NAME)
+        .select("*")
+        .order("id")
+        .execute()
+    )
+
+    return response.data or []
