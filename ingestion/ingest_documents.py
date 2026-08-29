@@ -34,7 +34,8 @@ def _activity_key(
     """
 
     return (
-        activity.get("source_file"),
+        activity.get("center_name"),
+        activity.get("branch"),
         activity.get("day"),
         activity.get("start_time"),
         activity.get("end_time"),

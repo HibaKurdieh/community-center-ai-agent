@@ -401,7 +401,12 @@ def _correct_intent_from_text(
         parsed.interpretation_confident = False
 
         return parsed
+    if parsed.category:
+        parsed.intent = "activity"
+        parsed.interpretation_confident = True
 
+        return parsed
+    
     if _looks_like_generic_activity_search(
         user_message
     ):

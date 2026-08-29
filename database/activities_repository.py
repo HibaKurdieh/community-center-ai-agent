@@ -79,6 +79,7 @@ def _activity_key(
 
     return (
         activity.get("center_name"),
+        activity.get("branch"),
         activity.get("day"),
         activity.get("start_time"),
         activity.get("end_time"),
@@ -144,6 +145,7 @@ def get_existing_activity_keys(
         client.table(TABLE_NAME)
         .select(
             "center_name,"
+            "branch,"
             "day,"
             "start_time,"
             "end_time,"

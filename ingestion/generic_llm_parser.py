@@ -380,6 +380,9 @@ def _activity_key(
             "center_name"
         ),
         activity.get(
+            "branch"
+        ),
+        activity.get(
             "day"
         ),
         activity.get(

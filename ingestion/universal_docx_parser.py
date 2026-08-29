@@ -523,6 +523,9 @@ def _activity_key(
             "center_name"
         ),
         activity.get(
+            "branch"
+        ),
+        activity.get(
             "day"
         ),
         activity.get(
@@ -953,19 +956,25 @@ def choose_best_known_parser(
             [],
         )
 
-    best = attempts[0]
+    eligible_attempts = [
+        attempt
+        for attempt in attempts
+        if (
+            attempt.score
+            >= MIN_PARSER_SCORE
+            and attempt.valid_count > 0
+            and attempt.validation_passed
+            and attempt.error is None
+        )
+    ]
 
-    if (
-        best.score
-        < MIN_PARSER_SCORE
-        or best.valid_count == 0
-        or not best.validation_passed
-    ):
-
+    if not eligible_attempts:
         return (
             None,
             attempts,
         )
+
+    best = eligible_attempts[0]
 
     return (
         best,

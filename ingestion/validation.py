@@ -43,8 +43,13 @@ REQUIRED_FIELDS = (
     "source_file",
     "center_name",
     "day",
+    "raw_day",
     "start_time",
     "name",
+    "raw_name",
+    "target_audience",
+    "source_language",
+    "status",
 )
 
 
