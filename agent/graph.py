@@ -815,7 +815,32 @@ def activity_node(
 
 # ---------------------------------------------------------
 # Build graph
+
+# LangGraph Flow
 # ---------------------------------------------------------
+#
+# START
+#   │
+#   │  Edge רגיל
+#   ▼
+# understand_request
+#   │
+#   │  Conditional Edges
+#   ├───────────────► activity_node ─────────► END
+#   │
+#   ├───────────────► clarification_node ────► END
+#   │
+#   └───────────────► fallback_node
+#                          │
+#                          │  Conditional Edges
+#                          ├────────► activity_node ───────► END
+#                          │
+#                          └────────► clarification_node ─► END
+#
+
+# מצב: המידע המשותף שעובר בין שלבי העבודה ומתעדכן לאורך הזרימה.
+
+# מעבר: החיבור שמגדיר לאיזה שלב עוברים אחרי שלב מסוים.
 
 def build_graph():
     """

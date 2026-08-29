@@ -9,7 +9,7 @@ from docx import Document
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-LECTURER_DATA_DIR = (
+SOURCE_DOCS_DIR = (
     PROJECT_ROOT
     / "data"
     / "raw"
@@ -19,8 +19,9 @@ LECTURER_DATA_DIR = (
 
 def read_docx(file_path: Path) -> dict[str, Any]:
     """
-    קורא קובץ Word ומחזיר את הטקסט והטבלאות
-    בלי לבצע עדיין parsing או normalization.
+    Reads a DOCX file and returns its raw content:
+    source file name, paragraphs, and tables.
+    No parsing or normalization is performed here.
     """
 
     document = Document(file_path)
@@ -57,16 +58,17 @@ def read_docx(file_path: Path) -> dict[str, Any]:
 
 def find_docx_files() -> list[Path]:
     """
-    מחזיר את כל קבצי ה-DOCX של המרצה.
+    Finds and returns all DOCX files
+    from the source documents directory.
     """
 
-    if not LECTURER_DATA_DIR.exists():
+    if not SOURCE_DOCS_DIR.exists():
         raise FileNotFoundError(
-            f"לא נמצאה תיקיית הנתונים: {LECTURER_DATA_DIR}"
+            f"לא נמצאה תיקיית הנתונים: {SOURCE_DOCS_DIR}"
         )
 
     return sorted(
-        LECTURER_DATA_DIR.glob("*.docx")
+        SOURCE_DOCS_DIR.glob("*.docx")
     )
 
 
@@ -79,7 +81,7 @@ def main() -> None:
 
     files = find_docx_files()
 
-    print("\n=== Lecturer DOCX Reader ===")
+    print("\n=== DOCX Reader ===")
     print(f"נמצאו {len(files)} קבצי Word.\n")
 
     for file_path in files:
@@ -108,3 +110,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# Run from the project root:
+# python -m ingestion.readers.docx_reader
