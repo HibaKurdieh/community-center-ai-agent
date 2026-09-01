@@ -253,23 +253,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-
-from ingestion.parsers.basic_schedule_parser import (
+from ingestion.parsers.schedule_parsers import (
     parse_basic_schedule,
-)
-from ingestion.parsers.table_schedule_parser import (
     parse_table_schedule,
-)
-from ingestion.parsers.dirty_schedule_parser import (
     parse_dirty_schedule,
-)
-from ingestion.parsers.bilingual_schedule_parser import (
     parse_bilingual_schedule,
-)
-from ingestion.parsers.grouped_schedule_parser import (
     parse_grouped_schedule,
-)
-from ingestion.parsers.edge_case_schedule_parser import (
     parse_edge_case_schedule,
 )
 
