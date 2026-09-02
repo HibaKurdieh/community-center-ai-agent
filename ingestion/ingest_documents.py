@@ -1,9 +1,11 @@
 """
-הקובץ מנהל את תהליך קליטת כל מסמכי המקור
+הקובץ מנהל את תהליך קליטת מסמכי המקור
 
-הוא מאתר את כל המסמכים בתיקייה
-מעביר כל מסמך דרך תהליך הפענוח
-מאחד את הפעילויות ומסיר כפילויות
+הוא יכול לעבד את כל המסמכים מתיקיית המקור
+או לקבל מסמך חיצוני יחיד לפי נתיב
+
+כל מסמך מועבר דרך תהליך הפענוח האוניברסלי
+והפעילויות המאוחדות נבדקות ומסוננות מכפילויות
 
 רק כאשר מתבקש לבצע שמירה
 הפעילויות מועברות לשכבת מסד הנתונים
@@ -226,8 +228,8 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Universal batch ingestion "
-            "for lecturer DOCX files."
+            "Universal ingestion "
+            "for DOCX files."
         )
     )
 
@@ -240,11 +242,53 @@ def main() -> None:
         ),
     )
 
+    parser.add_argument(
+        "--file",
+        type=Path,
+        help=(
+            "Path to a single external DOCX file."
+        ),
+    )
+
     args = parser.parse_args()
 
-    activities = (
-        ingest_all_documents()
-    )
+    if args.file is not None:
+        file_path = args.file.resolve()
+
+        if not file_path.exists():
+            raise FileNotFoundError(
+                file_path
+            )
+
+        if file_path.suffix.lower() != ".docx":
+            raise ValueError(
+                "Only DOCX files are supported."
+            )
+
+        (
+            activities,
+            parser_name,
+            attempts,
+        ) = parse_universal_docx(
+            file_path
+        )
+
+        activities = deduplicate_activities(
+            activities
+        )
+
+        print(
+            f"\nExternal file: {file_path.name}"
+        )
+
+        print(
+            f"Parser selected: {parser_name}"
+        )
+
+    else:
+        activities = (
+            ingest_all_documents()
+        )
 
     print_summary(
         activities
@@ -283,6 +327,7 @@ def main() -> None:
         "Duplicates:",
         stats["duplicates"],
     )
+
 
 if __name__ == "__main__":
     main()

@@ -48,7 +48,7 @@ Status: PASS
 
 # System Architecture
 
-![System Architecture](docs/architecture.png)
+![System Architecture](docs/system_map.png)
 
 ## Main System Flow
 
@@ -218,9 +218,9 @@ User:
 
 ## 2. Conversation Layer
 
-`agent/conversation.py`
+`agent/telegram_bot.py`
 
-שכבת השיחה אחראית לשמירת ההקשר בין הודעות המשתמש.
+שכבת השיחה אחראית לשמירת ההקשר בין הודעות המשתמש באמצעות `context.user_data` של Telegram.
 
 לדוגמה:
 
@@ -397,6 +397,7 @@ AgentState מגדיר את מבנה המידע שעובר בין ה-Nodes של L
 שכבת הכלים אחראית לחיפוש בפועל.
 
 הפעילויות נטענות מ-Supabase, והחיפוש עצמו הוא דטרמיניסטי ומתבצע באמצעות פילטרים מובנים.
+
 ניתן לסנן לפי:
 
 - Category
@@ -457,7 +458,11 @@ Supabase
 ה-Agent עובד מול מבנה נתונים אחיד שנשמר ב-Supabase לאחר שלב ה-Ingestion.
 
 המערכת אינה תלויה עוד במיפוי ידני בין שם הקובץ ל-Parser.
+
 היא מנסה את ה-Parsers הדטרמיניסטיים הקיימים ובוחרת את התוצאה האמינה ביותר.
+
+אם מספר תוצאות חזקות קרובות זו לזו, המערכת יכולה להשתמש ב-LLM Verifier כדי לבחור בין התוצאות הקיימות.
+
 אם אף Parser מוכר אינו מתאים, המערכת עוברת אוטומטית ל-Generic LLM Parser.
 
 ---
@@ -476,21 +481,24 @@ Supabase
 
 ```text
 ingestion/parsers/
-├── basic_schedule_parser.py
-├── bilingual_schedule_parser.py
-├── dirty_schedule_parser.py
-├── edge_case_schedule_parser.py
-├── grouped_schedule_parser.py
-└── table_schedule_parser.py
+
+└── schedule_parsers.py
 ```
 
 כל Parser מטפל בצורה שונה שבה מידע יכול להופיע במסמך.
+
 ה-Parsers אינם נבחרים לפי שם הקובץ.
 
 `ingestion/universal_docx_parser.py` מריץ את ה-Parsers בצורה בטוחה,
+
 מדרג את איכות התוצאות ובוחר את התוצאה המתאימה ביותר.
 
+אם מספר תוצאות חזקות קרובות זו לזו,
+
+`ingestion/llm_verifier.py` משמש להשוואה בין תוצאות ה-Parsers הקיימות.
+
 אם אף Parser מוכר אינו מחזיר תוצאה אמינה,
+
 `ingestion/generic_llm_parser.py` משמש כ-Fallback מבוסס GPT-4o-mini.
 
 ---
@@ -516,11 +524,17 @@ ingestion/parsers/
 `ingestion/ingest_documents.py`
 
 מזהה אוטומטית את כל קובצי ה-DOCX בתיקיית המקור,
+
+או מקבל קובץ DOCX חיצוני יחיד באמצעות `--file`,
+
 מעביר כל מסמך דרך ה-Universal Parser,
+
 מאחד את הפעילויות ומסיר כפילויות.
 
 ברירת המחדל היא Dry Run.
+
 בעת שימוש ב-`--save`, פעילויות חדשות נשמרות ישירות ב-Supabase תוך מניעת כפילויות.
+
 ---
 
 # Project Structure
@@ -529,26 +543,17 @@ ingestion/parsers/
 community-center-ai-agent/
 │
 ├── agent/
-│   ├── conversation.py
-│   │   └── Conversation context and follow-up handling
-│   │
 │   ├── graph.py
 │   │   └── LangGraph workflow and routing
 │   │
-│   ├── paths.py
-│   │   └── Shared project paths
-│   │
 │   ├── request_parser.py
 │   │   └── Natural-language understanding and parsing
-│   │
-│   ├── run_agent.py
-│   │   └── Local agent runner
 │   │
 │   ├── state.py
 │   │   └── LangGraph state definition
 │   │
 │   ├── telegram_bot.py
-│   │   └── Telegram interface
+│   │   └── Telegram interface, conversation context and follow-up handling
 │   │
 │   ├── tools.py
 │   │   └── Search, filtering and result formatting
@@ -559,31 +564,27 @@ community-center-ai-agent/
 │   ├── run_evaluation.py
 │   │   └── Evaluation runner
 │   │
-│   ├── evaluation_report.json
-│   │   └── Generated evaluation report
-│   │
-│   ├── validate_data.py
-│   │   └── Data-validation checks
-│   │
-│   └── data_validation_report.json
-│       └── Generated validation report
+│   └── validate_data.py
+│       └── Data-validation checks
 │
 ├── ingestion/
-│   ├── ingest.py
 │   ├── ingest_documents.py
 │   │   └── Document ingestion pipeline
+│   │
 │   ├── universal_docx_parser.py
 │   │   └── Automatic parser selection and LLM fallback routing
 │   │
 │   ├── generic_llm_parser.py
 │   │   └── Generic extraction for unknown DOCX structures
 │   │
-│   ├── universal_ingestion.py
-│   │   └── Single-file DOCX ingestion directly to Supabase
+│   ├── llm_verifier.py
+│   │   └── LLM verification between close parser candidates
+│   │
+│   ├── validation.py
+│   │   └── Activity validation
 │   │
 │   ├── test_universal_docx_parser.py
 │   │   └── Universal parser regression tests
-│   │
 │   │
 │   ├── normalize.py
 │   │   └── Data normalization
@@ -595,12 +596,8 @@ community-center-ai-agent/
 │   │   └── docx_reader.py
 │   │
 │   └── parsers/
-│       ├── basic_schedule_parser.py
-│       ├── bilingual_schedule_parser.py
-│       ├── dirty_schedule_parser.py
-│       ├── edge_case_schedule_parser.py
-│       ├── grouped_schedule_parser.py
-│       └── table_schedule_parser.py
+│       └── schedule_parsers.py
+│
 ├── database/
 │   ├── supabase_client.py
 │   │   └── Supabase connection
@@ -608,27 +605,22 @@ community-center-ai-agent/
 │   ├── activities_repository.py
 │   │   └── Activity reads, inserts and duplicate prevention
 │   │
-│   ├── migrate_activities.py
-│   │   └── Legacy one-time JSON-to-Supabase migration
+│   ├── __init__.py
 │   │
 │   └── schema.sql
 │       └── Supabase activities table schema
 │
 ├── data/
-│   ├── raw/
-│   │   └── Source documents
-│   │
-│   ├── processed/
-│   │   └── Processed activity data
-│   │
-│   └── ground_truth/
-│       └── Reference data used for verification
-│
-├── evaluation/
-│   └── Evaluation resources
+│   └── raw/
+│       ├── lecturer_samples/
+│       ├── synthetic/
+│       └── test_samples/
 │
 ├── docs/
-│   └── architecture.png
+│   ├── architecture.png
+│   ├── data_preparation_pipeline.png
+│   ├── langgraph_flow.png
+│   └── system_map.png
 │       └── Current system architecture
 │
 ├── .env.example
@@ -667,6 +659,7 @@ community-center-ai-agent/
 
 ```bash
 git clone https://github.com/HibaKurdieh/community-center-ai-agent.git
+
 cd community-center-ai-agent
 ```
 
@@ -723,22 +716,18 @@ python agent/telegram_bot.py
 
 ---
 
-## Local Agent
-
-לצורכי פיתוח ובדיקה ניתן להריץ:
-
-```bash
-python agent/run_agent.py
-```
-
----
-
 ## Data Ingestion
 
 כדי להריץ את תהליך ה-Ingestion במצב Dry Run:
 
 ```bash
 python -m ingestion.ingest_documents
+```
+
+כדי לעבד קובץ DOCX חיצוני יחיד:
+
+```bash
+python -m ingestion.ingest_documents --file "path/to/file.docx"
 ```
 
 לשמירה ישירה של פעילויות חדשות ב-Supabase:
@@ -819,11 +808,9 @@ python agent/validate_data.py
 
 ```text
 Activities Loaded: 85
-
 Critical Errors: 0
 Warnings: 6
 Duplicate Groups: 0
-
 Status: PASS
 ```
 
@@ -1042,7 +1029,6 @@ Current quality results:
 ```text
 Agent Evaluation: 30 / 30 PASS
 Evaluation Score: 100%
-
 Activities Validated: 85
 Critical Data Errors: 0
 Duplicate Groups: 0
