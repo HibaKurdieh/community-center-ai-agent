@@ -102,7 +102,10 @@ HELP_TEXT = (
     "/reset — איפוס השיחה והתחלת חיפוש חדש"
 )
 
-
+"""
+בונה את תפריט הכפתורים הראשי של הבוט
+ומחזירה את אפשרויות החיפוש המרכזיות למשתמש
+"""
 def _main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -145,7 +148,10 @@ def _main_keyboard() -> InlineKeyboardMarkup:
         ]
     )
 
-
+"""
+בונה את תפריט הכפתורים לאחר הצגת תוצאות החיפוש
+ומוסיפה אפשרות להצגת תוצאות נוספות כאשר קיימות תוצאות נוספות
+"""
 def _results_keyboard(
     has_more: bool,
 ) -> InlineKeyboardMarkup:
@@ -213,7 +219,10 @@ def _results_keyboard(
         rows
     )
 
-
+"""
+בונה תפריט כפתורים כאשר נדרש מידע נוסף מהמשתמש
+ומאפשרת להשלים את החיפוש או להמשיך ללא העדפה נוספת
+"""
 def _clarification_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -263,7 +272,10 @@ ClearField = Literal[
     "instructor",
 ]
 
-
+"""
+מגדירה את מבנה ההחלטה של שכבת השיחה
+ושומרת את סוג הפעולה המידע החדש והפילטרים שיש להסיר
+"""
 class ConversationDecision(BaseModel):
     """
     החלטה לגבי משמעות הודעת המשתמש
@@ -306,7 +318,10 @@ class ConversationDecision(BaseModel):
 # ---------------------------------------------------------
 # Environment
 # ---------------------------------------------------------
-
+"""
+קוראת את מפתח הטלגרם ממשתני הסביבה
+ומוודאת שהמפתח קיים לפני הפעלת הבוט
+"""
 def _get_bot_token() -> str:
 
     token = os.getenv(
@@ -321,7 +336,10 @@ def _get_bot_token() -> str:
 
     return token
 
-
+"""
+יוצרת את מודל השיחה
+ומגדירה שהפלט יחזור במבנה קבוע ומסודר
+"""
 def _get_conversation_model():
 
     if not os.getenv(
@@ -350,7 +368,10 @@ conversation_model = (
 # ---------------------------------------------------------
 # Text helpers
 # ---------------------------------------------------------
-
+"""
+מנרמלת את הטקסט לצורך השוואה עקבית
+ומסירה רווחים מיותרים
+"""
 def _normalize_text(
     text: str,
 ) -> str:
@@ -362,7 +383,10 @@ def _normalize_text(
         .split()
     )
 
-
+"""
+מסירה סימני פיסוק נפוצים מתחילת הטקסט ומסופו
+כדי לשפר את ההשוואה בין הודעות
+"""
 def _strip_common_punctuation(
     text: str,
 ) -> str:
@@ -371,7 +395,10 @@ def _strip_common_punctuation(
         "?!.,:;׳״\"'…"
     )
 
-
+"""
+בודקת האם ההודעה מכילה רק סימנים
+כדי להתעלם מהודעות ללא תוכן שימושי
+"""
 def _is_symbol_only_message(
     text: str,
 ) -> bool:
@@ -388,15 +415,13 @@ def _is_symbol_only_message(
         for character in stripped
     )
 
-
+"""
+ממירה ניסוחים תלויי מגדר לניסוחים ניטרליים
+כדי להתאים את התשובה לכל משתמש
+"""
 def _neutralize_response_text(
     text: str,
 ) -> str:
-    """
-    הופך ניסוחים תלויי-מגדר
-    לניסוחים ניטרליים ככל האפשר.
-    """
-
     replacements = {
         "הבנתי שאת מחפשת":
             "הבנתי שמחפשים",
@@ -432,7 +457,10 @@ def _neutralize_response_text(
 # ---------------------------------------------------------
 # Fast deterministic rules
 # ---------------------------------------------------------
-
+"""
+בודקת האם הודעת המשתמש היא ברכה מוכרת
+כדי לאפשר תגובה ישירה ללא שימוש במודל השפה
+"""
 def _is_greeting(
     text: str,
 ) -> bool:
@@ -464,7 +492,10 @@ def _is_greeting(
         in greetings
     )
 
-
+"""
+בודקת האם הודעת המשתמש היא הודעת תודה מוכרת
+כדי לאפשר תגובה ישירה ללא שימוש במודל השפה
+"""
 def _is_thanks(
     text: str,
 ) -> bool:
@@ -493,7 +524,10 @@ def _is_thanks(
         in thanks_messages
     )
 
-
+"""
+בודקת האם ההודעה מביעה תודה או רצון לסיים
+כדי לזהות במהירות הודעות שאינן דורשות חיפוש נוסף
+"""
 def _looks_like_thanks_or_stop(
     text: str,
 ) -> bool:
@@ -530,7 +564,10 @@ def _looks_like_thanks_or_stop(
         )
     )
 
-
+"""
+בודקת האם המשתמש מבקש לראות תוצאות נוספות
+לפי ניסוחים נפוצים של אישור או בקשה להמשך
+"""
 def _is_more_request(
     text: str,
 ) -> bool:
@@ -577,7 +614,10 @@ def _is_more_request(
 
     return False
 
-
+"""
+בודקת האם המשתמש רוצה לעצור את הצגת התוצאות הנוספות
+ולסיים את שלב ההמשך של החיפוש
+"""
 def _is_stop_more_request(
     text: str,
 ) -> bool:
@@ -626,7 +666,10 @@ SEARCH_FIELDS = [
     "instructor",
 ]
 
-
+"""
+בודקת האם במצב החיפוש קיים לפחות תנאי חיפוש אחד
+שאפשר להשתמש בו לביצוע החיפוש
+"""
 def _has_meaningful_search_filters(
     state: dict[str, Any],
 ) -> bool:
@@ -638,7 +681,10 @@ def _has_meaningful_search_filters(
         for field in SEARCH_FIELDS
     )
 
-
+"""
+ממירה את מצב החיפוש הקודם לטקסט ברור
+כדי להעביר לשכבת השיחה את המידע שכבר ידוע
+"""
 def _state_to_context_text(
     state: dict[str, Any],
 ) -> str:
@@ -787,7 +833,10 @@ def _state_to_context_text(
         parts
     )
 
-
+"""
+בונה שאלת חיפוש מלאה מתוך המידע השמור במצב השיחה
+כדי לשלוח בקשה ברורה לתהליך החיפוש
+"""
 def _build_query_from_state(
     state: dict[str, Any],
 ) -> str:
@@ -944,7 +993,10 @@ def _build_query_from_state(
 # ---------------------------------------------------------
 # Fragment normalization
 # ---------------------------------------------------------
-
+"""
+מנרמלת מידע חדש שהתקבל בשאלת המשך
+והופכת אותו לשאלת חיפוש מלאה כאשר נדרש
+"""
 def _normalize_follow_up_fragment(
     query_fragment: str,
 ) -> str:
@@ -990,7 +1042,10 @@ def _normalize_follow_up_fragment(
 # ---------------------------------------------------------
 # Clear-field helpers
 # ---------------------------------------------------------
-
+"""
+מסירה ממצב החיפוש פילטרים שהמשתמש ביקש לבטל
+ומעדכנת את תנאי החיפוש השמורים
+"""
 def _apply_clear_fields(
     state: dict[str, Any],
     clear_fields: list[ClearField],
@@ -1014,7 +1069,10 @@ def _apply_clear_fields(
                 field
             ] = None
 
-
+"""
+מזהה מתוך הודעת המשתמש אילו תנאי חיפוש יש להסיר
+לפי ניסוחים קבועים ומוכרים מראש
+"""
 def _detect_clear_fields_from_text(
     user_message: str,
 ) -> list[ClearField]:
@@ -1130,7 +1188,10 @@ def _detect_clear_fields_from_text(
 # ---------------------------------------------------------
 # LLM conversation classification
 # ---------------------------------------------------------
-
+"""
+מנתחת את הודעת המשתמש בהתאם להקשר השיחה הקודם
+ומחליטה אם מדובר בחיפוש חדש המשך שיחה עצירה או בקשה נוספת
+"""
 def _classify_conversation_message(
     user_message: str,
     previous_state: dict[str, Any] | None,
@@ -1474,7 +1535,10 @@ clear_fields=[]
 # ---------------------------------------------------------
 # Follow-up merge
 # ---------------------------------------------------------
-
+"""
+ממזגת מידע חדש משאלת המשך עם תנאי החיפוש הקודמים
+ובונה בקשת חיפוש מלאה ומעודכנת
+"""
 def _merge_follow_up(
     previous_state: dict[str, Any],
     query_fragment: str | None,
@@ -1576,7 +1640,10 @@ def _merge_follow_up(
 # ---------------------------------------------------------
 # Async wrappers for blocking AI calls
 # ---------------------------------------------------------
-
+"""
+מריצה את סיווג הודעת השיחה בתהליך נפרד
+כדי שעבודת הבוט לא תיעצר בזמן העיבוד
+"""
 async def _classify_conversation_message_async(
     user_message: str,
     previous_state: dict[str, Any] | None,
@@ -1596,7 +1663,10 @@ async def _classify_conversation_message_async(
         waiting_for_clarification,
     )
 
-
+"""
+מריצה את מיזוג שאלת ההמשך בתהליך נפרד
+כדי לשמור על פעילות רציפה של הבוט בזמן העיבוד
+"""
 async def _merge_follow_up_async(
     previous_state: dict[str, Any],
     query_fragment: str | None,
@@ -1618,15 +1688,31 @@ async def _merge_follow_up_async(
     )
 
 
+# ---------------------------------------------------------
+# Agent flow
+# ---------------------------------------------------------
+#
+# User message
+#      |
+#      v
+# Telegram conversation layer
+#      |
+#      v
+# Final search message
+#      |
+#      v
+# Graph
+#      |
+#      v
+# Result
+
+"""
+מפעילה את תהליך הסוכן בתהליך נפרד
+ומעבירה אליו את הודעת המשתמש לצורך עיבוד
+"""
 async def _invoke_graph_async(
     user_message: str,
 ) -> dict[str, Any]:
-    """
-    מריץ את LangGraph ב-thread נפרד,
-    כדי שה-bot יוכל להמשיך להציג typing...
-    בזמן עיבוד הבקשה.
-    """
-
     return await asyncio.to_thread(
         graph.invoke,
         {
@@ -1639,7 +1725,10 @@ async def _invoke_graph_async(
 # ---------------------------------------------------------
 # Context-check helper
 # ---------------------------------------------------------
-
+"""
+בודקת האם ההודעה החדשה קשורה לחיפוש הקודם
+או שמדובר בבקשת חיפוש חדשה ונפרדת
+"""
 def _should_check_conversation_context(
     user_message: str,
     previous_state: dict[str, Any],
@@ -1751,7 +1840,10 @@ def _should_check_conversation_context(
 # ---------------------------------------------------------
 # Pagination
 # ---------------------------------------------------------
-
+"""
+בונה את העמוד הבא של תוצאות החיפוש
+ומחזירה את התוצאות יחד עם מצב ההמשך
+"""
 def _build_page_answer(
     results: list[
         dict[str, Any]
@@ -1845,7 +1937,10 @@ def _build_page_answer(
 # ---------------------------------------------------------
 # User-data helpers
 # ---------------------------------------------------------
-
+"""
+מאפסת את המידע השמור להצגת תוצאות נוספות
+ומחזירה את מצב התצוגה להתחלה
+"""
 def _reset_pagination(
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
@@ -1909,7 +2004,10 @@ def _reset_conversation_state(
 # ---------------------------------------------------------
 # Simple replies
 # ---------------------------------------------------------
-
+"""
+שולחת למשתמש הודעת ברכה
+ומציגה את תפריט הפעולות הראשי
+"""
 async def _reply_greeting(
     update: Update,
 ) -> None:
@@ -1931,7 +2029,10 @@ async def _reply_greeting(
         ),
     )
 
-
+"""
+שולחת תגובה כאשר המשתמש מביע תודה
+ומחזירה את תפריט הפעולות הראשי
+"""
 async def _reply_thanks(
     update: Update,
 ) -> None:
@@ -1955,7 +2056,10 @@ async def _reply_thanks(
 # ---------------------------------------------------------
 # Commands
 # ---------------------------------------------------------
-
+"""
+מטפלת בפקודת ההתחלה של הבוט
+מאפסת את מצב השיחה ומציגה את הודעת הפתיחה
+"""
 async def start_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -1979,7 +2083,10 @@ async def start_command(
         ),
     )
 
-
+"""
+מטפלת בבקשת העזרה של המשתמש
+ומציגה הסבר על אפשרויות השימוש בבוט
+"""
 async def help_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -1999,7 +2106,10 @@ async def help_command(
         ),
     )
 
-
+"""
+מאפסת את מצב השיחה והחיפוש של המשתמש
+ומאפשרת להתחיל חיפוש חדש
+"""
 async def reset_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -2028,7 +2138,10 @@ async def reset_command(
 # ---------------------------------------------------------
 # Sticker handler
 # ---------------------------------------------------------
-
+"""
+מטפלת בקבלת מדבקה מהמשתמש
+ומתעלמת ממנה ללא הפעלת תהליך החיפוש
+"""
 async def handle_sticker(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -2039,8 +2152,37 @@ async def handle_sticker(
 
 # ---------------------------------------------------------
 # Main conversation processor
+# תהליך עיבוד הודעת המשתמש
 # ---------------------------------------------------------
+#
+# הודעת משתמש
+#      |
+#      v
+# בדיקות מהירות
+#      |
+#      v
+# טעינת מצב השיחה
+#      |
+#      v
+# בדיקת המשך או הבהרה
+#      |
+#      v
+# בניית הבקשה הסופית
+#      |
+#      v
+# הפעלת הסוכן
+#      |
+#      v
+# שליחת תשובה
+#      |
+#      v
+# שמירת מצב החיפוש
 
+"""
+מנהלת את כל תהליך העיבוד של הודעת המשתמש
+בודקת את מצב השיחה מטפלת בהמשכים ובהבהרות
+מעבירה את הבקשה לסוכן ושומרת את מצב החיפוש החדש
+"""
 async def _process_user_message(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -2678,7 +2820,10 @@ async def _process_user_message(
 # ---------------------------------------------------------
 # Typing indicator
 # ---------------------------------------------------------
-
+"""
+מחדשת את מצב הכתיבה בזמן שהבקשה מעובדת
+כדי שהמשתמש יראה שהבוט עדיין עובד
+"""
 async def _typing_loop(
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
@@ -2713,7 +2858,10 @@ async def _typing_loop(
             ),
         )
 
-
+"""
+מפעילה את עיבוד הודעת המשתמש
+ובמקביל מציגה מצב כתיבה עד לסיום העיבוד
+"""
 async def _process_with_typing(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -2778,11 +2926,28 @@ async def _process_with_typing(
         except asyncio.CancelledError:
             pass
 
+# ---------------------------------------------------------
+# זרימת קלט מהמשתמש
+# ---------------------------------------------------------
+#
+# הודעת טקסט ------> handle_message
+#                         |
+#                         v
+#                 תהליך העיבוד הראשי
+#
+# לחיצה על כפתור --> handle_button
+#                         |
+#                         v
+#                 תהליך העיבוד הראשי
+
 
 # ---------------------------------------------------------
 # Text-message handler
 # ---------------------------------------------------------
-
+"""
+מקבלת הודעת טקסט מהמשתמש
+ומעבירה אותה לתהליך העיבוד הראשי
+"""
 async def handle_message(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -2816,7 +2981,10 @@ async def handle_message(
 # ---------------------------------------------------------
 # Inline-button handler
 # ---------------------------------------------------------
-
+"""
+מטפלת בלחיצות על כפתורי הבוט
+וממירה כל בחירה להודעה מתאימה להמשך העיבוד
+"""
 async def handle_button(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -3104,7 +3272,10 @@ async def handle_button(
 # ---------------------------------------------------------
 # Error handler
 # ---------------------------------------------------------
-
+"""
+מטפלת בשגיאות שמתקבלות במהלך עבודת הבוט
+ומדפיסה את פרטי השגיאה לצורך בדיקה
+"""
 async def error_handler(
     update: object,
     context: ContextTypes.DEFAULT_TYPE,
@@ -3121,7 +3292,10 @@ async def error_handler(
 # ---------------------------------------------------------
 # Application
 # ---------------------------------------------------------
-
+"""
+בונה את אפליקציית הטלגרם
+ומחברת את הפקודות ההודעות והכפתורים לפונקציות המתאימות
+"""
 def build_application() -> Application:
 
     token = (
@@ -3189,7 +3363,10 @@ def build_application() -> Application:
 # ---------------------------------------------------------
 # Main
 # ---------------------------------------------------------
-
+"""
+מפעילה את אפליקציית הטלגרם
+ומתחילה להאזין לעדכונים חדשים מהמשתמשים
+"""
 def main() -> None:
 
     print(

@@ -1,10 +1,17 @@
+"""
+אחראי על השלמת שעת סיום כאשר היא אינה מופיעה במפורש במקור
+
+המערכת מעדיפה תמיד מידע מפורש שמגיע מהמסמך
+אם קיימת משך פעילות ניתן לחשב ממנו את שעת הסיום
+כאשר אין מידע מספיק המערכת משאירה את שעת הסיום חסרה
+
+החישוב אינו תלוי בשם קובץ מסוים
+ולכן ניתן להשתמש בו גם עבור מקורות חדשים
+"""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-
-
-SOURCE_02 = "02_מרכז_ספורט_אלונים_טבלה.docx"
-SOURCE_03 = "03_מרכז_כושר_נופים_מלוכלך.docx"
 
 
 def _add_minutes(
@@ -12,7 +19,9 @@ def _add_minutes(
     minutes: int,
 ) -> str | None:
     """
-    מוסיף מספר דקות לשעת התחלה בפורמט HH:MM.
+    מקבלת שעת התחלה ומספר דקות
+    מחשבת את שעת הסיום על ידי הוספת משך הפעילות
+    מחזירה שעה בפורמט אחיד או ערך ריק כאשר החישוב אינו אפשרי
     """
 
     if not start_time:
@@ -23,6 +32,7 @@ def _add_minutes(
             start_time,
             "%H:%M",
         )
+
     except ValueError:
         return None
 
@@ -42,175 +52,58 @@ def infer_end_time(
     start_time: str | None,
     day: str | None = None,
     explicit_end_time: str | None = None,
+    duration_minutes: int | None = None,
 ) -> tuple[str | None, str]:
     """
-    מחזיר:
-        (end_time, end_time_source)
+    קובעת את שעת הסיום לפי המידע שקיים בפעילות
 
-    end_time_source:
-    - explicit: זמן הסיום הופיע במקור.
-    - inferred_source_rule: הוסק לפי כללי המקור.
-    - missing: לא ניתן להסיק בצורה אמינה.
+    אם שעת הסיום קיימת במקור היא נשמרת ללא שינוי
+    אם היא חסרה אך קיים משך פעילות מחשבים את שעת הסיום
+    אם אין מידע מספיק לא ממציאים שעה ומשאירים את הערך חסר
 
-    Important:
-    אם זמן סיום הופיע במקור, לעולם לא דורסים אותו.
+    הפונקציה אינה תלויה בשם של מסמך מסוים
     """
 
+    # אם שעת הסיום הופיעה במסמך משתמשים בה כפי שהיא
     if explicit_end_time is not None:
         return (
             explicit_end_time,
             "explicit",
         )
 
+    # ללא שעת התחלה אי אפשר לחשב שעת סיום
     if start_time is None:
         return (
             None,
             "missing",
         )
 
-    # -----------------------------------------------------
-    # Source 02 — Alonim table
-    # -----------------------------------------------------
-    #
-    # רוב שיעורי המקור הם 55 דקות.
-    # קיימים שני חריגים ידועים במבנה הבדיקה.
-    #
-    if source_file == SOURCE_02:
+    # אם משך הפעילות ידוע מחשבים את שעת הסיום
+    if duration_minutes is not None:
 
-        duration_minutes = 55
+        if duration_minutes <= 0:
+            return (
+                None,
+                "missing",
+            )
 
-        if activity_name == "אקווה אירובי":
-            duration_minutes = 45
-
-        elif activity_name == "ריקודי עם":
-            duration_minutes = 70
-
-        return (
-            _add_minutes(
-                start_time,
-                duration_minutes,
-            ),
-            "inferred_source_rule",
-        )
-
-    # -----------------------------------------------------
-    # Source 03 — dirty/noisy source
-    # -----------------------------------------------------
-    #
-    # בחלק מהשורות זמן הסיום אינו מופיע.
-    # שתי שורות נשארות ללא זמן סיום גם ב-Ground Truth,
-    # ולכן לא ממציאים עבורן זמן.
-    #
-
-    source_03_rules: dict[
-        tuple[str | None, str, str],
-        int | None,
-    ] = {
-        # Sunday
-        (
-            "ראשון",
-            "08:00",
-            "התעמלות מתונהה",
-        ): None,
-
-        (
-            "ראשון",
-            "09:00",
-            "פילטיס",
-        ): 50,
-
-        # Monday
-        (
-            "שני",
-            "07:40",
-            "התעמלות מתונה",
-        ): None,
-
-        (
-            "שני",
-            "19:10",
-            "זומבה",
-        ): 50,
-
-        (
-            "שני",
-            "20:10",
-            "יוגה",
-        ): 50,
-
-        # Tuesday
-        (
-            "שלישי",
-            "08:30",
-            "ספינינג",
-        ): 50,
-
-        # Wednesday
-        (
-            "רביעי",
-            "09:15",
-            "התעמלות במים",
-        ): 45,
-
-        (
-            "רביעי",
-            "18:30",
-            "קיקבוקס",
-        ): 60,
-
-        # Thursday
-        (
-            "חמישי",
-            "09:00",
-            "פלדנקרייז",
-        ): 60,
-
-        (
-            "חמישי",
-            "19:00",
-            "פילאטיס",
-        ): 60,
-
-        # Friday
-        (
-            "שישי",
-            "08:30",
-            "עיצוב דינמי",
-        ): 50,
-    }
-
-    if source_file == SOURCE_03:
-
-        key = (
-            day,
+        end_time = _add_minutes(
             start_time,
-            activity_name,
+            duration_minutes,
         )
 
-        if key not in source_03_rules:
-            return (
-                None,
-                "missing",
-            )
-
-        duration = source_03_rules[
-            key
-        ]
-
-        if duration is None:
+        if end_time is None:
             return (
                 None,
                 "missing",
             )
 
         return (
-            _add_minutes(
-                start_time,
-                duration,
-            ),
-            "inferred_source_rule",
+            end_time,
+            "inferred_duration",
         )
 
+    # אם אין שעת סיום ואין משך אמין לא ממציאים מידע
     return (
         None,
         "missing",

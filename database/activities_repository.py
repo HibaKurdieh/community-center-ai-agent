@@ -1,3 +1,12 @@
+"""
+הקובץ אחראי על העבודה עם טבלת הפעילויות במסד הנתונים
+
+הוא מכין את הרשומות לפני שמירה
+בודק שדות חובה ומונע הכנסת כפילויות
+
+בנוסף הוא מאפשר לקרוא את הפעילויות הקיימות
+לצורך שימוש בשכבת החיפוש של המערכת
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -57,6 +66,9 @@ REQUIRED_FIELDS = (
 def _has_value(
     value: Any,
 ) -> bool:
+    """
+    בודקת אם קיים ערך שימושי בשדה
+    """
     if value is None:
         return False
 
@@ -70,11 +82,10 @@ def _activity_key(
     activity: dict[str, Any],
 ) -> tuple[Any, ...]:
     """
-    Logical key used to detect duplicate activities.
+    יוצרת מפתח לזיהוי פעילות כפולה
 
-    source_file is intentionally NOT part of the key,
-    so the same activity coming from another source
-    is not inserted twice.
+    שם קובץ המקור אינו חלק מהמפתח
+    כדי שאותה פעילות ממקור אחר לא תישמר פעמיים
     """
 
     return (
@@ -93,8 +104,8 @@ def _validate_activity(
     activity: dict[str, Any],
 ) -> None:
     """
-    Validates fields that must exist before inserting
-    an activity into Supabase.
+    בודקת שכל השדות החיוניים קיימים
+    לפני שליחת הפעילות למסד הנתונים
     """
 
     missing = [
@@ -116,10 +127,10 @@ def _prepare_activity(
     activity: dict[str, Any],
 ) -> dict[str, Any]:
     """
-    Keeps only fields that belong to the database table.
+    מכינה את הפעילות לשמירה במסד הנתונים
 
-    This prevents accidental extra fields from being
-    sent to Supabase.
+    בודקת את השדות החיוניים
+    ושומרת רק שדות שקיימים בטבלה
     """
 
     _validate_activity(activity)
@@ -134,8 +145,8 @@ def get_existing_activity_keys(
     client=None,
 ) -> set[tuple[Any, ...]]:
     """
-    Reads the current activities from Supabase and
-    builds duplicate-detection keys.
+    קוראת את הפעילויות הקיימות במסד הנתונים
+    ויוצרת מהן מפתחות לצורך זיהוי כפילויות
     """
 
     if client is None:
@@ -168,14 +179,14 @@ def insert_new_activities(
     activities: list[dict[str, Any]],
 ) -> dict[str, int]:
     """
-    Inserts only activities that do not already exist.
+    שומרת במסד הנתונים רק פעילויות חדשות
 
-    Returns statistics:
-    {
-        "received": ...,
-        "inserted": ...,
-        "duplicates": ...
-    }
+    הפונקציה משווה את הפעילויות לרשומות שכבר קיימות
+    ומונעת כפילויות גם מול מסד הנתונים
+    וגם בתוך קבוצת הנתונים החדשה
+
+    בסיום מוחזר סיכום של מספר הרשומות שהתקבלו
+    נשמרו או זוהו ככפולות
     """
 
     if not activities:
@@ -249,7 +260,8 @@ def insert_new_activities(
     }
 def get_all_activities() -> list[dict[str, Any]]:
     """
-    Reads all activities from Supabase.
+    קוראת את כל הפעילויות מטבלת הפעילויות
+    ומחזירה אותן לשימוש בשכבת החיפוש
     """
 
     client = get_supabase_client()

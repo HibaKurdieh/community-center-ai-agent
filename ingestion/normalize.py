@@ -1,3 +1,12 @@
+"""
+אחראי על תקנון ערכים שמגיעים ממסמכי המקור
+מנקה טקסט ומאחד ימים שעות טווחי שעות ומצבי פעילות
+המטרה היא ליצור ערכים אחידים לפני המשך העיבוד והבדיקות
+
+הרצה מתיקיית הפרויקט
+python -m ingestion.normalize
+"""
+
 from __future__ import annotations
 
 import re
@@ -37,7 +46,9 @@ DAY_MAP = {
 
 def normalize_text(value: str | None) -> str | None:
     """
-    מנקה רווחים מיותרים ומחזיר None לערכים ריקים.
+    מקבלת ערך טקסט ומנקה ממנו רווחים מיותרים
+    מזהה ערכים ריקים או ערכים שאינם מכילים מידע ממשי
+    מחזירה טקסט נקי או ערך ריק כאשר אין מידע שימושי
     """
 
     if value is None:
@@ -53,7 +64,9 @@ def normalize_text(value: str | None) -> str | None:
 
 def normalize_day(value: str | None) -> str | None:
     """
-    ממיר יום בעברית או באנגלית לשם יום אחיד בעברית.
+   מקבלת שם יום בצורות שונות
+   מנקה את הערך וממירה אותו לשם יום אחיד בעברית
+   מחזירה את הערך לאחר התקנון
     """
 
     value = normalize_text(value)
@@ -66,7 +79,9 @@ def normalize_day(value: str | None) -> str | None:
 
 def normalize_time(value: str | None) -> str | None:
     """
-    ממיר פורמטים שונים של שעות לפורמט HH:MM.
+   מקבלת שעה שיכולה להופיע במספר צורות שונות
+   מזהה את מבנה השעה וממירה אותה לפורמט אחיד
+   מחזירה שעה תקינה או ערך ריק כאשר לא ניתן לזהות שעה
 
     דוגמאות:
     8.00 -> 08:00
@@ -132,11 +147,14 @@ def normalize_time(value: str | None) -> str | None:
     return None
 
 
-def normalize_time_range(
+def normalize_time_range(     
     value: str | None,
 ) -> tuple[str | None, str | None]:
+    
     """
-    מחלץ שעת התחלה ושעת סיום מטווח שעות.
+     מקבלת ערך שיכול להכיל שעת התחלה ושעת סיום
+     מפרידה בין השעות ומתקננת כל אחת מהן
+     מחזירה שעת התחלה ושעת סיום כאשר הן קיימות
     """
 
     value = normalize_text(value)
@@ -157,7 +175,9 @@ def normalize_time_range(
 
 def normalize_status(value: str | None) -> str:
     """
-    מזהה סטטוס בסיסי של פעילות.
+    מקבלת מידע על מצב הפעילות
+    מזהה אם הפעילות פעילה מבוטלת או שעדיין חסר מידע
+    מחזירה מצב אחיד לשימוש בהמשך התהליך
     """
 
     if not value:
@@ -173,7 +193,7 @@ def normalize_status(value: str | None) -> str:
 
     return "active"
 
-
+# מריץ בדיקה עצמאית של פעולות התקנון בקובץ
 if __name__ == "__main__":
     tests = [
         "8.00",

@@ -1,3 +1,12 @@
+"""
+הקובץ משמש כפענוח חלופי למסמכים שמבנם אינו מזוהה בצורה אמינה
+
+הוא שולח את תוכן המסמך למודל שפה ומבקש ממנו לחלץ פעילויות במבנה מוגדר
+לאחר מכן הקוד מבצע תקנון בדיקות בסיסיות והסרת כפילויות
+
+המטרה היא לאפשר למערכת להתמודד גם עם מבני מסמכים חדשים
+מבלי להמציא מידע שחסר במקור
+"""
 from __future__ import annotations
 
 import json
@@ -29,10 +38,10 @@ load_dotenv()
 
 class GenericActivityCandidate(BaseModel):
     """
-    Raw activity extracted by the LLM.
+    מגדירה את מבנה הפעילות שהמודל רשאי להחזיר
 
-    Most fields are optional because we do not want
-    the model to invent missing information.
+    רוב השדות יכולים להיות חסרים
+    כדי שהמודל לא ימציא מידע שלא מופיע במסמך
     """
 
     branch: str | None = None
@@ -69,7 +78,10 @@ class GenericActivityCandidate(BaseModel):
 
 class GenericDocumentExtraction(BaseModel):
     """
-    Complete structured extraction from one document.
+    מגדירה את מבנה התוצאה המלאה של מסמך אחד
+
+    התוצאה כוללת את שם המרכז שפת המקור
+    ורשימת הפעילויות שחולצו מהמסמך
     """
 
     center_name: str | None = None
@@ -111,10 +123,11 @@ def _build_document_content(
     file_path: Path,
 ) -> str:
     """
-    Reads DOCX using the existing reader and serializes
-    paragraphs and tables for the LLM.
+    קוראת את המסמך באמצעות שכבת הקריאה הקיימת
+    וממירה את הפסקאות והטבלאות לטקסט שניתן לשלוח למודל
 
-    We do NOT send the binary Word file to the model.
+    הקובץ עצמו אינו נשלח למודל
+    ונשמרת גם מגבלת גודל כדי למנוע בקשה גדולה מדי
     """
 
     raw = read_docx(
@@ -158,6 +171,10 @@ def _build_document_content(
 def _normalize_int(
     value: int | None,
 ) -> int | None:
+    """
+    בודקת ערך מספרי
+    ומסירה ערכים שליליים שאינם מתאימים לשדות הפעילות
+    """
     if value is None:
         return None
 
@@ -175,10 +192,13 @@ def _normalize_candidate(
     source_language: str,
 ) -> dict[str, Any] | None:
     """
-    Converts one LLM candidate into the same Activity
-    schema used by the deterministic parsers.
+    ממירה פעילות שהתקבלה מהמודל למבנה האחיד של המערכת
 
-    Python performs the final normalization.
+    הקוד מבצע תקנון נוסף של הטקסט היום והשעות
+    בודק שדות בסיסיים ודוחה תוצאה שחסר בה מידע הכרחי
+
+    המודל אחראי על ההבנה
+    אך הקוד הדטרמיניסטי אחראי על התקנון הסופי
     """
 
     name = normalize_text(
@@ -375,6 +395,10 @@ def _normalize_candidate(
 def _activity_key(
     activity: dict[str, Any],
 ) -> tuple[Any, ...]:
+    """
+    יוצרת מפתח אחיד לזיהוי פעילויות כפולות
+    לפי השדות המרכזיים של הפעילות
+    """
     return (
         activity.get(
             "center_name"
@@ -410,6 +434,10 @@ def _deduplicate(
 ) -> list[
     dict[str, Any]
 ]:
+    """
+    מסירה פעילויות כפולות מתוצאת המודל
+    כדי שאותה פעילות לא תופיע יותר מפעם אחת
+    """
     seen: set[
         tuple[Any, ...]
     ] = set()
@@ -448,9 +476,14 @@ def parse_generic_schedule(
     dict[str, Any]
 ]:
     """
-    Generic fallback parser for DOCX files whose structure
-    is not reliably handled by the known deterministic
-    parsers.
+    משמש כפענוח חלופי כאשר מבנה המסמך
+    אינו מזוהה בצורה אמינה על ידי דרכי הפענוח הקבועות
+
+    הפונקציה מכינה את תוכן המסמך ושולחת אותו למודל השפה
+    מקבלת פעילויות במבנה מסודר
+    מעבירה כל פעילות דרך תקנון נוסף
+    מסירה תוצאות חלקיות וכפולות
+    ומחזירה רק פעילויות שניתן להמשיך לעבד
     """
 
     document_content = (

@@ -1,3 +1,19 @@
+"""
+הקובץ אחראי להבין בקשות חופשיות של המשתמש
+ולהמיר אותן לפילטרים מובנים לצורך החיפוש
+
+לדוגמה:
+הודעת המשתמש:
+"אילו חוגי פילאטיס יש ביום שלישי בערב לגיל 16?"
+
+הקובץ מחזיר:
+intent = activity
+category = פילאטיס
+day = שלישי
+start_after = 17:00
+start_before = 23:59
+age = 16
+"""
 from __future__ import annotations
 
 import os
@@ -17,15 +33,11 @@ load_dotenv()
 # ---------------------------------------------------------
 # Structured request
 # ---------------------------------------------------------
-
+"""
+מגדירה מבנה אחיד לתוצאת ניתוח בקשת המשתמש
+ושומרת את כל פרטי החיפוש שזוהו מהטקסט
+"""
 class ParsedRequest(BaseModel):
-    """
-    מבנה אחיד להבנת בקשת המשתמש.
-
-    בגרסה הנוכחית של הסוכן
-    אנו מטפלים בחוגים / פעילויות בלבד.
-    """
-
     intent: Literal[
         "activity",
         "unknown",
@@ -121,11 +133,11 @@ class ParsedRequest(BaseModel):
 # ---------------------------------------------------------
 # LLM
 # ---------------------------------------------------------
-
+"""
+יוצרת את מודל השפה שמשמש להבנת בקשות המשתמש
+ומוודאת שמפתח הגישה קיים לפני ההפעלה
+"""
 def build_model() -> ChatOpenAI:
-    """
-    יוצר את מודל השפה.
-    """
 
     if not os.getenv(
         "OPENAI_API_KEY"
@@ -162,30 +174,25 @@ WEEKDAY_TO_HEBREW = {
     6: "ראשון",
 }
 
-
+"""
+ממירה תאריך ליום המתאים בשבוע בעברית
+"""
 def _hebrew_day_for_date(
     value: datetime,
 ) -> str:
-    """
-    ממיר תאריך ליום בשבוע בעברית.
-    """
 
     return WEEKDAY_TO_HEBREW[
         value.weekday()
     ]
 
-
+"""
+מטפלת בביטויי זמן יחסיים כמו היום מחר ואתמול
+וממירה אותם ליום המתאים בשבוע
+"""
 def _apply_relative_day_rules(
     user_message: str,
     parsed: ParsedRequest,
 ) -> ParsedRequest:
-    """
-    מטפל בביטויים:
-    היום, מחר, אתמול.
-
-    במקרה של ביטוי יחסי מפורש,
-    הכלל הדטרמיניסטי גובר על ה-LLM.
-    """
 
     text = (
         user_message
@@ -239,19 +246,13 @@ def _apply_relative_day_rules(
 # ---------------------------------------------------------
 # Deterministic intent helpers
 # ---------------------------------------------------------
-
+"""
+מזהה בקשות חיפוש קצרות וברורות
+לפי ניסוחים כלליים יחד עם רמזים מתאימים לחיפוש
+"""
 def _looks_like_generic_activity_search(
     user_message: str,
 ) -> bool:
-    """
-    מזהה שאלות קצרות וברורות
-    שמובנן הוא בקשת חיפוש.
-
-    זהו fallback דטרמיניסטי בלבד.
-    ה-LLM עדיין אחראי להבנה הסמנטית
-    של ניסוחים חופשיים ושגיאות כתיב.
-    """
-
     text = (
         user_message
         .strip()
@@ -322,18 +323,13 @@ def _looks_like_generic_activity_search(
         for clue in contextual_clues
     )
 
-
+"""
+מזהה בקשות כלליות מדי שאין בהן מספיק מידע
+כדי לבצע חיפוש ממוקד בביטחון
+"""
 def _looks_like_vague_activity_request(
     user_message: str,
 ) -> bool:
-    """
-    מזהה בקשות כלליות מדי.
-
-    במקרה כזה עדיף לשמור את המידע
-    שכן הובן ולבקש clarification,
-    במקום להציג כמות גדולה של תוצאות.
-    """
-
     text = (
         user_message
         .strip()
@@ -358,18 +354,14 @@ def _looks_like_vague_activity_request(
         for pattern in vague_patterns
     )
 
-
+"""
+מתקנת את סוג הבקשה במקרים ברורים לפי הטקסט
+ומונעת החלטה שגויה כאשר קיימת עדות חד משמעית
+"""
 def _correct_intent_from_text(
     user_message: str,
     parsed: ParsedRequest,
 ) -> ParsedRequest:
-    """
-    שכבת הגנה דטרמיניסטית ל-intent.
-
-    ה-LLM הוא מקור ההבנה הראשי,
-    והקוד מתקן רק מקרים ברורים.
-    """
-
     text = (
         user_message
         .strip()
@@ -419,7 +411,10 @@ def _correct_intent_from_text(
 # ---------------------------------------------------------
 # Time helpers
 # ---------------------------------------------------------
-
+"""
+בודקת ששעה היא חוקית
+וממירה אותה לפורמט אחיד של שעות ודקות
+"""
 def _normalize_time_string(
     hour_text: str,
     minute_text: str,
@@ -454,17 +449,13 @@ def _normalize_time_string(
         f"{minute:02d}"
     )
 
-
+"""
+מאמתת ומנרמלת ערך זמן שהתקבל מניתוח הבקשה
+כדי לוודא שהשעה תקינה לפני השימוש בה
+"""
 def _normalize_parsed_time(
     value: str | None,
 ) -> str | None:
-    """
-    מאמת ומנרמל שעה שהגיעה מה-LLM.
-
-    ה-LLM אחראי להבנת משמעות הטקסט,
-    אבל Python מוודא שהערך הטכני תקין.
-    """
-
     if value is None:
         return None
 
@@ -485,42 +476,26 @@ def _normalize_parsed_time(
         match.group(2),
     )
 
-
+"""
+מחלצת שעה מתוך התאמה שנמצאה בטקסט
+ומעבירה אותה לתהליך אימות ונרמול
+"""
 def _extract_time_from_match(
     match: re.Match[str],
 ) -> str | None:
-    """
-    מחלץ שעה מתוך regex match.
-    """
-
     return _normalize_time_string(
         match.group(1),
         match.group(2),
     )
 
-
+"""
+מנתחת ומנרמלת את תנאי הזמן בבקשת המשתמש
+ומשלבת בין הבנה סמנטית לבין כללים קבועים ובטוחים
+"""
 def _apply_time_rules(
     user_message: str,
     parsed: ParsedRequest,
 ) -> ParsedRequest:
-    """
-    ממזג בין הבנה סמנטית של ה-LLM
-    לבין כללים דטרמיניסטיים לזמן.
-
-    עיקרון:
-    - ה-LLM מבין שפה חופשית, ניסוחים ושגיאות כתיב.
-    - Python מאמת פורמט ומכריע כאשר קיים ביטוי
-      מפורש וברור בטקסט.
-    - אם אין כלל דטרמיניסטי מתאים,
-      לא מוחקים אוטומטית את הבנת ה-LLM.
-
-    סדר עדיפויות:
-    1. שעה מדויקת מפורשת
-    2. אחרי / לפני מפורשים
-    3. חלקי יום ברורים
-    4. הבנת הזמן של ה-LLM
-    """
-
     text = (
         user_message
         .strip()
@@ -703,19 +678,14 @@ def _apply_time_rules(
 # ---------------------------------------------------------
 # Target-audience helpers
 # ---------------------------------------------------------
-
+"""
+מנרמלת את קהל היעד שהוזכר בבקשה
+וממירה ניסוחים שונים לערכים אחידים
+"""
 def _apply_target_audience_rules(
     user_message: str,
     parsed: ParsedRequest,
 ) -> ParsedRequest:
-    """
-    מנרמל קהל יעד.
-
-    ה-LLM מבין את הכוונה,
-    והכללים כאן מאחדים ערכים
-    לפורמט הקיים בדאטה.
-    """
-
     text = (
         user_message
         .strip()
@@ -768,14 +738,14 @@ def _apply_target_audience_rules(
 # ---------------------------------------------------------
 # Hallucination cleanup
 # ---------------------------------------------------------
-
+"""
+מסירה ערכים שזוהו בטעות כשם מרכז
+כאשר ברור שהם מתארים זמן או יום
+"""
 def _clean_false_center_name(
     user_message: str,
     parsed: ParsedRequest,
 ) -> ParsedRequest:
-    """
-    מנקה ערכים ברורים שאינם שמות מרכזים.
-    """
 
     if parsed.center_name is None:
         return parsed
@@ -807,19 +777,13 @@ def _clean_false_center_name(
 
     return parsed
 
-
+"""
+מנרמלת שמות מרכזים לצורך השוואה
+ומסירה מילים כלליות שאינן חלק משם המרכז
+"""
 def _normalize_center_reference(
     value: str,
 ) -> str:
-    """
-    מנרמל טקסט שנראה כמו שם מרכז
-    לצורך השוואה בלבד.
-
-    לדוגמה:
-    "מרכז ספורט מעיין" -> "מעיין"
-    "מרכז הספורט הדס" -> "הדס"
-    """
-
     text = (
         value
         .strip()
@@ -863,28 +827,13 @@ def _normalize_center_reference(
 
     return text
 
-
+"""
+מונעת מצב שבו שם המרכז נשמר בטעות גם כמיקום
+ושומרת מיקום רק כאשר הוא מתאר מקום פיזי אמיתי
+"""
 def _clean_center_from_location(
     parsed: ParsedRequest,
 ) -> ParsedRequest:
-    """
-    מונע מצב שבו שם מרכז
-    נכנס בטעות גם ל-location.
-
-    לדוגמה:
-
-    center_name="מעיין"
-    location="מרכז מעיין"
-
-    במקרה כזה location אינו מיקום פיזי,
-    ולכן הוא צריך להיות None.
-
-    מיקום אמיתי כמו:
-    "סטודיו תחתון"
-    או "בריכה"
-    נשמר כרגיל.
-    """
-
     if (
         parsed.center_name is None
         or parsed.location is None
@@ -912,19 +861,14 @@ def _clean_center_from_location(
 
     return parsed
 
-
+"""
+מסירה שדות שהתקבלו ללא עדות מתאימה בטקסט
+כדי לצמצם מידע שהומצא במהלך הניתוח
+"""
 def _clean_unmentioned_fields(
     user_message: str,
     parsed: ParsedRequest,
 ) -> ParsedRequest:
-    """
-    מנקה שדות שה-LLM החזיר
-    ללא עדות סבירה בטקסט.
-
-    מיועד בעיקר למניעת hallucination
-    של שמות מרכזים, מדריכים וסניפים.
-    """
-
     text = (
         user_message
         .strip()
@@ -986,23 +930,15 @@ def _clean_unmentioned_fields(
 
     return parsed
 
-
+"""
+מוודאת שהיום שנמצא בבקשה באמת נתמך בטקסט
+ומסירה יום שאין לו עדות מספקת
+"""
 def _clean_unmentioned_day(
     user_message: str,
     parsed: ParsedRequest,
 ) -> ParsedRequest:
-    """
-    מגן מפני hallucination של יום.
-
-    אם היום הגיע מביטוי יחסי
-    כמו היום / מחר / אתמול,
-    הוא נשמר.
-
-    אם ה-LLM זיהה יום מתוך שגיאת כתיב
-    ברורה, אנו מאפשרים לו להישאר
-    כאשר קיימת עדות טקסטואלית סבירה.
-    """
-
+    
     if parsed.day is None:
         return parsed
 
@@ -1069,22 +1005,14 @@ def _clean_unmentioned_day(
 # ---------------------------------------------------------
 # Shared post-processing
 # ---------------------------------------------------------
-
+"""
+מפעילה את כל שלבי האימות והנרמול בסדר קבוע
+ומחזירה בקשת חיפוש נקייה ומוכנה לשימוש
+"""
 def _postprocess_parsed_request(
     user_message: str,
     result: ParsedRequest,
 ) -> ParsedRequest:
-    """
-    מפעיל את כל שכבות האימות
-    והנרמול בסדר קבוע.
-
-    LLM:
-    הבנת משמעות.
-
-    Python:
-    validation, normalization,
-    וכללים דטרמיניסטיים בטוחים.
-    """
 
     result = _correct_intent_from_text(
         user_message,
@@ -1133,15 +1061,13 @@ def _postprocess_parsed_request(
 # ---------------------------------------------------------
 # Main parsing
 # ---------------------------------------------------------
-
+"""
+מנתחת בקשה חופשית של המשתמש
+ומחזירה את פרטי החיפוש בצורה מובנית ומאומתת
+"""
 def parse_user_request(
     user_message: str,
 ) -> ParsedRequest:
-    """
-    מנתח בקשה חופשית בעברית
-    ומחזיר מידע מובנה לחיפוש חוגים.
-    """
-
     current_day = (
         _hebrew_day_for_date(
             datetime.now()
@@ -1563,7 +1489,10 @@ interpretation_confident=False
 # ---------------------------------------------------------
 # Fallback interpretation
 # ---------------------------------------------------------
-
+"""
+מבצעת ניסיון נוסף להבין בקשה שלא הובנה מספיק
+ומפעילה לאחר מכן את אותם שלבי האימות והנרמול
+"""
 def reinterpret_unclear_request(
     user_message: str,
 ) -> ParsedRequest:
