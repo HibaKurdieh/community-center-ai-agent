@@ -50,7 +50,7 @@ Status: PASS
 
 # System Architecture
 
-![System Architecture](docs/system_map.png)
+![System Architecture](docs/architecture.png)
 
 ## Main System Flow
 
@@ -748,7 +748,9 @@ community-center-ai-agent/
 └── requirements.txt
 ```
 
-> Generated folders such as `__pycache__` are intentionally omitted from the structure above.> The local `.env` file is also intentionally omitted because it contains sensitive environment variables and is not committed to Git.
+> Generated folders such as `__pycache__` are intentionally omitted from the structure above.
+>
+> The local `.env` file is also intentionally omitted because it contains sensitive environment variables and is not committed to Git.
 
 ---
 
