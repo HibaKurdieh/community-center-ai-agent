@@ -23,6 +23,8 @@
 - Fallback interpretation
 - Pagination להצגת תוצאות נוספות
 - Data Ingestion Pipeline
+- תמיכה ב-DOCX וב-Excel
+- תשתית למקור API חיצוני מובנה
 - Automated Evaluation
 - Data Validation
 
@@ -220,7 +222,9 @@ User:
 
 `agent/telegram_bot.py`
 
-שכבת השיחה אחראית לשמירת ההקשר בין הודעות המשתמש באמצעות `context.user_data` של Telegram.
+שכבת השיחה אחראית להבנת הקשר השיחה ולשמירת המידע בין הודעות המשתמש באמצעות `context.user_data` של Telegram.
+
+השכבה משתמשת במודל GPT-4o-mini עם פלט מובנה מסוג `ConversationDecision` כדי להחליט כיצד ההודעה החדשה קשורה לשיחה הקודמת.
 
 לדוגמה:
 
@@ -246,6 +250,8 @@ User:
 - Thanks
 - Unclear Messages
 - Pagination
+
+הזיכרון של השיחה נשמר ב-`context.user_data` וכולל בין היתר את מצב החיפוש האחרון, מצב ההבהרה ומידע הדרוש להצגת תוצאות נוספות.
 
 כך ניתן לנהל שיחה טבעית ולא רק סדרה של שאלות מבודדות.
 
@@ -396,7 +402,7 @@ AgentState מגדיר את מבנה המידע שעובר בין ה-Nodes של L
 
 שכבת הכלים אחראית לחיפוש בפועל.
 
-הפעילויות נטענות מ-Supabase, והחיפוש עצמו הוא דטרמיניסטי ומתבצע באמצעות פילטרים מובנים.
+הפעילויות נטענות מ-Supabase באמצעות `database/activities_repository.py`, והחיפוש עצמו הוא דטרמיניסטי ומתבצע ב-Python באמצעות פילטרים מובנים.
 
 ניתן לסנן לפי:
 
@@ -435,35 +441,63 @@ start_after = 17:00
 
 עיבוד הנתונים מתבצע בשכבה נפרדת מה-Agent.
 
+המערכת תומכת במספר מקורות נתונים וממירה את כולם למבנה Activity אחיד לפני השמירה ב-Supabase.
+
 ```text
-DOCX Source Documents
-       ↓
-Document Reader
-       ↓
+DOCX
+  ↓
+DOCX Reader
+  ↓
 Universal DOCX Parser
-       ↓
-Known Deterministic Parsers
-       ↓
-Reliable result?
-  ├── YES → Use selected parser result
-  └── NO  → Generic LLM Parser
-       ↓
-Normalization & Validation
-       ↓
-Deduplication
-       ↓
+  ↓
+6 Deterministic Parsers
+  ↓
+Normalization & Time Inference
+  ↓
+Validation & Quality Evaluation
+  ↓
+Result Selection
+  ├── Direct Selection
+  ├── LLM Verifier
+  └── Generic LLM Parser
+  ↓
+Final Validation
+
+
+Excel
+  ↓
+Excel Reader
+  ↓
+Source Adapter
+  ↓
+Source Ingestion
+  ↓
+Validation & Deduplication
+
+
+External Structured API
+  ↓
+External API Reader
+  ↓
+Source Adapter
+  ↓
+Source Ingestion
+  ↓
+Validation & Deduplication
+
+
+All Sources
+  ↓
+Ingestion Controller
+  ↓
+Activities Repository
+  ↓
 Supabase
 ```
 
-ה-Agent עובד מול מבנה נתונים אחיד שנשמר ב-Supabase לאחר שלב ה-Ingestion.
+ה-Agent אינו קורא מחדש את קובצי המקור בזמן חיפוש.
 
-המערכת אינה תלויה עוד במיפוי ידני בין שם הקובץ ל-Parser.
-
-היא מנסה את ה-Parsers הדטרמיניסטיים הקיימים ובוחרת את התוצאה האמינה ביותר.
-
-אם מספר תוצאות חזקות קרובות זו לזו, המערכת יכולה להשתמש ב-LLM Verifier כדי לבחור בין התוצאות הקיימות.
-
-אם אף Parser מוכר אינו מתאים, המערכת עוברת אוטומטית ל-Generic LLM Parser.
+לאחר שלב ה-Ingestion הפעילויות נשמרות במבנה אחיד ב-Supabase, וה-Agent עובד מול הנתונים שכבר נשמרו.
 
 ---
 
@@ -477,29 +511,97 @@ Supabase
 
 ## Schedule Parsers
 
-המערכת כוללת מספר Parsers כדי להתמודד עם מבנים שונים של מסמכי לוחות זמנים.
+המערכת כוללת שישה Parsers דטרמיניסטיים כדי להתמודד עם מבנים שונים של מסמכי לוחות זמנים.
+
+כולם נמצאים באותו קובץ:
 
 ```text
-ingestion/parsers/
+ingestion/parsers/schedule_parsers.py
+```
 
-└── schedule_parsers.py
+ה-Parsers הם:
+
+```text
+parse_basic_schedule
+parse_table_schedule
+parse_dirty_schedule
+parse_bilingual_schedule
+parse_grouped_schedule
+parse_edge_case_schedule
 ```
 
 כל Parser מטפל בצורה שונה שבה מידע יכול להופיע במסמך.
 
 ה-Parsers אינם נבחרים לפי שם הקובץ.
 
-`ingestion/universal_docx_parser.py` מריץ את ה-Parsers בצורה בטוחה,
+`ingestion/universal_docx_parser.py` מנהל את תהליך הפענוח, מפעיל את ה-Parsers, משווה בין התוצאות לפי איכות ותקינות ובוחר את התוצאה המתאימה ביותר.
 
-מדרג את איכות התוצאות ובוחר את התוצאה המתאימה ביותר.
+אם קיימת תוצאה חזקה וברורה, המערכת יכולה לבחור בה ישירות.
 
-אם מספר תוצאות חזקות קרובות זו לזו,
+אם מספר תוצאות חזקות קרובות זו לזו, `ingestion/llm_verifier.py` משמש להשוואה בין תוצאות ה-Parsers הקיימות.
 
-`ingestion/llm_verifier.py` משמש להשוואה בין תוצאות ה-Parsers הקיימות.
+ה-Verifier אינו יוצר פעילויות חדשות אלא בוחר בין תוצאות קיימות.
 
-אם אף Parser מוכר אינו מחזיר תוצאה אמינה,
+אם אף Parser מוכר אינו מחזיר תוצאה אמינה, `ingestion/generic_llm_parser.py` משמש כ-Fallback מבוסס GPT-4o-mini ויוצר חילוץ כללי יותר של הנתונים.
 
-`ingestion/generic_llm_parser.py` משמש כ-Fallback מבוסס GPT-4o-mini.
+לפני שהתוצאה נחשבת מוכנה לשמירה היא עוברת Final Validation.
+
+---
+
+## Excel Reader
+
+`ingestion/readers/excel_reader.py`
+
+אחראי לקריאת קובצי Excel.
+
+כל שורה בקובץ הופכת לרשומה ומועברת ל-`ingestion/source_adapter.py`, שממיר אותה למבנה Activity האחיד של המערכת.
+
+המערכת יכולה להשתמש בגיליון שנבחר באמצעות `--sheet`, בגיליון בשם `activities` אם הוא קיים, או בגיליון הראשון בקובץ.
+
+---
+
+## External API Reader
+
+`ingestion/readers/external_api_reader.py`
+
+מספק תשתית לקריאת נתונים מובנים ממקור API חיצוני המחזיר JSON.
+
+הקורא תומך במבנה של רשימה ישירה או ברשומות הנמצאות תחת שדות נפוצים כגון:
+
+```text
+activities
+data
+results
+items
+```
+
+בשלב הנוכחי מדובר בתשתית כללית למקור חיצוני ולא בחיבור פעיל לשירות Calaméo מסוים.
+
+---
+
+## Source Adapter
+
+`ingestion/source_adapter.py`
+
+אחראי להתאים רשומות שמגיעות ממקורות מובנים שונים למבנה Activity האחיד של המערכת.
+
+הוא מזהה שמות שדות חלופיים, מנרמל ערכים ומשתמש בשכבות ה-Normalization וה-Time Inference הקיימות.
+
+---
+
+## Source Ingestion
+
+`ingestion/source_ingestion.py`
+
+מרכז את קליטת מקורות הנתונים המובנים הנוספים.
+
+השכבה אחראית על:
+
+- קריאת הנתונים
+- Validation
+- הסרת רשומות לא תקינות
+- Deduplication
+- החזרת רשימת Activities אחידה למסלול הראשי
 
 ---
 
@@ -523,17 +625,20 @@ ingestion/parsers/
 
 `ingestion/ingest_documents.py`
 
-מזהה אוטומטית את כל קובצי ה-DOCX בתיקיית המקור,
+משמש כבקר הראשי של תהליך ה-Ingestion.
 
-או מקבל קובץ DOCX חיצוני יחיד באמצעות `--file`,
+הוא יכול:
 
-מעביר כל מסמך דרך ה-Universal Parser,
+- לעבד את כל קובצי ה-DOCX בתיקיית המקור
+- לקבל קובץ DOCX יחיד
+- לקבל קובץ Excel
+- לקבל כתובת של מקור API חיצוני מובנה
 
-מאחד את הפעילויות ומסיר כפילויות.
+כל מקור מועבר למסלול המתאים לו ולאחר מכן הפעילויות מוחזרות במבנה Activity אחיד.
 
 ברירת המחדל היא Dry Run.
 
-בעת שימוש ב-`--save`, פעילויות חדשות נשמרות ישירות ב-Supabase תוך מניעת כפילויות.
+בעת שימוש ב-`--save`, פעילויות חדשות נשמרות ישירות ב-Supabase דרך `database/activities_repository.py` תוך מניעת כפילויות.
 
 ---
 
@@ -543,11 +648,17 @@ ingestion/parsers/
 community-center-ai-agent/
 │
 ├── agent/
+│   ├── evaluation_cases.json
+│   │   └── Automated evaluation scenarios
+│   │
 │   ├── graph.py
 │   │   └── LangGraph workflow and routing
 │   │
 │   ├── request_parser.py
 │   │   └── Natural-language understanding and parsing
+│   │
+│   ├── run_evaluation.py
+│   │   └── Evaluation runner
 │   │
 │   ├── state.py
 │   │   └── LangGraph state definition
@@ -558,78 +669,86 @@ community-center-ai-agent/
 │   ├── tools.py
 │   │   └── Search, filtering and result formatting
 │   │
-│   ├── evaluation_cases.json
-│   │   └── Automated evaluation scenarios
-│   │
-│   ├── run_evaluation.py
-│   │   └── Evaluation runner
-│   │
 │   └── validate_data.py
 │       └── Data-validation checks
-│
-├── ingestion/
-│   ├── ingest_documents.py
-│   │   └── Document ingestion pipeline
-│   │
-│   ├── universal_docx_parser.py
-│   │   └── Automatic parser selection and LLM fallback routing
-│   │
-│   ├── generic_llm_parser.py
-│   │   └── Generic extraction for unknown DOCX structures
-│   │
-│   ├── llm_verifier.py
-│   │   └── LLM verification between close parser candidates
-│   │
-│   ├── validation.py
-│   │   └── Activity validation
-│   │
-│   ├── test_universal_docx_parser.py
-│   │   └── Universal parser regression tests
-│   │
-│   ├── normalize.py
-│   │   └── Data normalization
-│   │
-│   ├── time_inference.py
-│   │   └── Time normalization and inference
-│   │
-│   ├── readers/
-│   │   └── docx_reader.py
-│   │
-│   └── parsers/
-│       └── schedule_parsers.py
-│
-├── database/
-│   ├── supabase_client.py
-│   │   └── Supabase connection
-│   │
-│   ├── activities_repository.py
-│   │   └── Activity reads, inserts and duplicate prevention
-│   │
-│   ├── __init__.py
-│   │
-│   └── schema.sql
-│       └── Supabase activities table schema
 │
 ├── data/
 │   └── raw/
 │       ├── lecturer_samples/
-│       ├── synthetic/
-│       └── test_samples/
+│       │   ├── 01_מרכז_ספורט_הדס_בסיסי.docx
+│       │   ├── 02_מרכז_ספורט_אלונים_טבלה.docx
+│       │   ├── 03_מרכז_כושר_נופים_מלוכלך.docx
+│       │   ├── 04_Neve_Sport_Center_bilingual.docx
+│       │   ├── 05_מרכז_ספורט_מעיין_לפי_חוג.docx
+│       │   └── 06_מרכז_ספורט_גלים_מקרי_קצה.docx
+│       │
+│       └── synthetic/
+│           ├── community_center_booklet.docx
+│           └── community_center_data.xlsx
+│
+├── database/
+│   ├── __init__.py
+│   │
+│   ├── activities_repository.py
+│   │   └── Activity reads, inserts and duplicate prevention
+│   │
+│   ├── schema.sql
+│   │   └── Supabase activities table schema
+│   │
+│   └── supabase_client.py
+│       └── Supabase connection
 │
 ├── docs/
 │   ├── architecture.png
-│   ├── data_preparation_pipeline.png
 │   ├── langgraph_flow.png
 │   └── system_map.png
-│       └── Current system architecture
+│
+├── ingestion/
+│   ├── generic_llm_parser.py
+│   │   └── Generic extraction for unknown DOCX structures
+│   │
+│   ├── ingest_documents.py
+│   │   └── Main ingestion controller
+│   │
+│   ├── llm_verifier.py
+│   │   └── LLM verification between close parser candidates
+│   │
+│   ├── normalize.py
+│   │   └── Data normalization
+│   │
+│   ├── source_adapter.py
+│   │   └── Unified activity mapping for structured sources
+│   │
+│   ├── source_ingestion.py
+│   │   └── Structured-source ingestion and deduplication
+│   │
+│   ├── test_universal_docx_parser.py
+│   │   └── Universal parser regression tests
+│   │
+│   ├── time_inference.py
+│   │   └── Time normalization and inference
+│   │
+│   ├── universal_docx_parser.py
+│   │   └── Automatic parser selection and LLM fallback routing
+│   │
+│   ├── validation.py
+│   │   └── Activity validation
+│   │
+│   ├── parsers/
+│   │   └── schedule_parsers.py
+│   │
+│   └── readers/
+│       ├── docx_reader.py
+│       ├── excel_reader.py
+│       └── external_api_reader.py
 │
 ├── .env.example
 ├── .gitignore
-├── requirements.txt
-└── README.md
+├── README.md
+└── requirements.txt
 ```
 
-> Generated folders such as `__pycache__` are intentionally omitted from the structure above.
+> Generated folders such as `__pycache__` are intentionally omitted from the structure above.> The local `.env` file is also intentionally omitted because it contains sensitive environment variables and is not committed to Git.
 
 ---
 
@@ -694,9 +813,12 @@ OPENAI_API_KEY=
 TELEGRAM_BOT_TOKEN=
 SUPABASE_URL=
 SUPABASE_SECRET_KEY=
+EXTERNAL_API_KEY=
 ```
 
 לאחר מכן יש להזין את הערכים המתאימים בקובץ `.env` המקומי.
+
+`EXTERNAL_API_KEY` נדרש רק כאשר המקור החיצוני שבו משתמשים דורש מפתח גישה.
 
 > `.env` אינו מועלה ל-Git.
 
@@ -718,7 +840,7 @@ python agent/telegram_bot.py
 
 ## Data Ingestion
 
-כדי להריץ את תהליך ה-Ingestion במצב Dry Run:
+כדי להריץ את תהליך ה-Ingestion במצב Dry Run על קובצי ה-DOCX שבתיקיית המקור:
 
 ```bash
 python -m ingestion.ingest_documents
@@ -730,11 +852,45 @@ python -m ingestion.ingest_documents
 python -m ingestion.ingest_documents --file "path/to/file.docx"
 ```
 
+כדי לעבד קובץ Excel:
+
+```bash
+python -m ingestion.ingest_documents --file "path/to/file.xlsx"
+```
+
+ניתן להעביר שם מרכז כברירת מחדל:
+
+```bash
+python -m ingestion.ingest_documents --file "path/to/file.xlsx" --center-name "מרכז קהילתי"
+```
+
+ניתן לבחור גיליון מסוים:
+
+```bash
+python -m ingestion.ingest_documents --file "path/to/file.xlsx" --sheet "activities"
+```
+
+כדי לקרוא נתונים ממקור API חיצוני מובנה:
+
+```bash
+python -m ingestion.ingest_documents --api-url "https://example.com/api/activities"
+```
+
+אם המקור החיצוני דורש מפתח גישה, ניתן לשמור אותו במשתנה הסביבה `EXTERNAL_API_KEY`.
+
 לשמירה ישירה של פעילויות חדשות ב-Supabase:
 
 ```bash
 python -m ingestion.ingest_documents --save
 ```
+
+ניתן להשתמש ב-`--save` גם יחד עם מקור יחיד, לדוגמה:
+
+```bash
+python -m ingestion.ingest_documents --file "path/to/file.xlsx" --save
+```
+
+---
 
 # Automated Evaluation
 
@@ -984,6 +1140,8 @@ Evaluation
 - התוצאות תלויות במידע שקיים במאגר
 - זמני התגובה תלויים גם בקריאות למודל השפה
 - המערכת פועלת כיום בתחום החיפוש של פעילויות
+- החיבור למקור API חיצוני הוא תשתית כללית ותלוי במבנה ובאימות של השירות החיצוני
+- אין בשלב זה חיבור פעיל ל-Calaméo API
 
 המערכת מטפלת במידע חסר בצורה מפורשת ואינה ממציאה ערכים שאינם ידועים.
 
@@ -1002,7 +1160,7 @@ Evaluation
 - שיפור זמני תגובה
 - הרחבת Data Validation
 - תמיכה בשפות נוספות
-- הרחבת מקורות הנתונים
+- חיבור לספקי מידע חיצוניים נוספים
 - Deployment לסביבת Production
 
 ---
@@ -1022,7 +1180,15 @@ The system combines:
 
 The agent supports follow-up questions, context preservation, clarification, spelling variations, multiple search filters and pagination.
 
-The project also contains a universal DOCX ingestion pipeline with deterministic parser selection, an LLM fallback for unknown document structures, direct Supabase storage, automated agent evaluation and data-validation tools.
+The project contains a multi-source ingestion architecture supporting DOCX documents and Excel files, together with a generic foundation for structured external APIs.
+
+DOCX documents use six deterministic parsers managed by a universal parser, with an LLM verifier when strong candidates are close and a generic LLM fallback when no known parser is reliable.
+
+Excel and structured external API records are adapted to the same Activity schema before validation, deduplication and storage in Supabase.
+
+The external API integration is currently provider-independent infrastructure and is not an active Calaméo API connection.
+
+The project also includes automated agent evaluation and data-validation tools.
 
 Current quality results:
 

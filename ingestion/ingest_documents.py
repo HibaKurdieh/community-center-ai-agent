@@ -1,11 +1,11 @@
 """
-הקובץ מנהל את תהליך קליטת מסמכי המקור
+הקובץ מנהל את תהליך קליטת מקורות הנתונים
 
-הוא יכול לעבד את כל המסמכים מתיקיית המקור
-או לקבל מסמך חיצוני יחיד לפי נתיב
+המערכת תומכת בקובצי מסמכים קובצי אקסל
+ובמקור חיצוני המחזיר נתונים מובנים
 
-כל מסמך מועבר דרך תהליך הפענוח האוניברסלי
-והפעילויות המאוחדות נבדקות ומסוננות מכפילויות
+כל מקור מועבר למסלול העיבוד המתאים לו
+והפעילויות מומרות למבנה אחיד נבדקות ומסוננות מכפילויות
 
 רק כאשר מתבקש לבצע שמירה
 הפעילויות מועברות לשכבת מסד הנתונים
@@ -87,11 +87,11 @@ def deduplicate_activities(
 
 def ingest_all_documents() -> list[dict[str, Any]]:
     """
-    Automatically discovers all DOCX files in the
-    lecturer data directory and processes each one
-    through the universal parser.
+    מאתרת את כל קובצי המסמכים בתיקיית המרצה
+    ומעבירה כל קובץ דרך תהליך הפענוח האוניברסלי
 
-    No filename-to-parser mapping is required.
+    בחירת המפענח מתבצעת לפי תוכן המסמך
+    ולא לפי שם הקובץ
     """
 
     file_paths = sorted(
@@ -233,9 +233,9 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Universal ingestion "
-            "for DOCX files."
-        )
+            "Ingestion for DOCX, Excel "
+            "and external structured sources."
+            )
     )
 
     parser.add_argument(
