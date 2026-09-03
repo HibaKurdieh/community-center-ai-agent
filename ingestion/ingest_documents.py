@@ -10,7 +10,9 @@
 רק כאשר מתבקש לבצע שמירה
 הפעילויות מועברות לשכבת מסד הנתונים
 """
+
 from __future__ import annotations
+
 import argparse
 import os
 import sys
@@ -28,13 +30,14 @@ if str(PROJECT_ROOT) not in sys.path:
 from database.activities_repository import (
     insert_new_activities,
 )
-from ingestion.universal_docx_parser import (
-    parse_universal_docx,
+from ingestion.ai_docx_parser import (
+    parse_ai_docx,
 )
 from ingestion.source_ingestion import (
     ingest_external_source,
     ingest_structured_file,
 )
+
 
 LECTURER_DATA_DIR = (
     PROJECT_ROOT
@@ -48,7 +51,7 @@ def _activity_key(
     activity: dict[str, Any],
 ) -> tuple[Any, ...]:
     """
-    מפתח לזיהוי כפילויות בין הרשומות.
+    מפתח לזיהוי כפילויות בין הרשומות
     """
 
     return (
@@ -67,35 +70,44 @@ def deduplicate_activities(
     activities: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """
-    מסיר כפילויות מהתוצאה המאוחדת.
+    מסירה כפילויות מהתוצאה המאוחדת
     """
 
     seen: set[tuple[Any, ...]] = set()
     unique: list[dict[str, Any]] = []
 
     for activity in activities:
-        key = _activity_key(activity)
+        key = _activity_key(
+            activity
+        )
 
         if key in seen:
             continue
 
-        seen.add(key)
-        unique.append(activity)
+        seen.add(
+            key
+        )
+
+        unique.append(
+            activity
+        )
 
     return unique
 
 
 def ingest_all_documents() -> list[dict[str, Any]]:
     """
-    מאתרת את כל קובצי המסמכים בתיקיית המרצה
-    ומעבירה כל קובץ דרך תהליך הפענוח האוניברסלי
+    מאתרת את כל קובצי הוורד בתיקיית המרצה
 
-    בחירת המפענח מתבצעת לפי תוכן המסמך
-    ולא לפי שם הקובץ
+    כל מסמך מועבר לפענוח סמנטי באמצעות מודל השפה
+    ולאחר מכן עובר תקנון ובדיקת תקינות
+    לפני שהוא מצורף לתוצאה המאוחדת
     """
 
     file_paths = sorted(
-        LECTURER_DATA_DIR.glob("*.docx")
+        LECTURER_DATA_DIR.glob(
+            "*.docx"
+        )
     )
 
     if not file_paths:
@@ -109,16 +121,13 @@ def ingest_all_documents() -> list[dict[str, Any]]:
     ] = []
 
     print(
-        "\n=== Universal Document Ingestion Pipeline ===\n"
+        "\n"
+        "=== AI Document Ingestion Pipeline ==="
+        "\n"
     )
 
     for file_path in file_paths:
-
-        (
-            activities,
-            parser_name,
-            attempts,
-        ) = parse_universal_docx(
+        activities = parse_ai_docx(
             file_path
         )
 
@@ -128,8 +137,7 @@ def ingest_all_documents() -> list[dict[str, Any]]:
 
         print(
             f"{file_path.name}: "
-            f"{len(activities)} activities "
-            f"| parser={parser_name}"
+            f"{len(activities)} activities"
         )
 
     return deduplicate_activities(
@@ -141,17 +149,22 @@ def print_summary(
     activities: list[dict[str, Any]],
 ) -> None:
     """
-    מדפיס סיכום קצר של תוצאת ה-ingestion.
+    מדפיסה סיכום קצר של תוצאת תהליך הקליטה
     """
 
-    print("\n" + "—" * 60)
+    print(
+        "\n" + "—" * 60
+    )
 
     print(
-        "סה\"כ שיעורים לאחר איחוד:",
+        'סה"כ שיעורים לאחר איחוד:',
         len(activities),
     )
 
-    counts_by_source: dict[str, int] = {}
+    counts_by_source: dict[
+        str,
+        int,
+    ] = {}
 
     for activity in activities:
         source_file = activity.get(
@@ -159,7 +172,9 @@ def print_summary(
             "unknown",
         )
 
-        counts_by_source[source_file] = (
+        counts_by_source[
+            source_file
+        ] = (
             counts_by_source.get(
                 source_file,
                 0,
@@ -167,7 +182,9 @@ def print_summary(
             + 1
         )
 
-    print("\nלפי קובץ:")
+    print(
+        "\nלפי קובץ:"
+    )
 
     for source_file, count in sorted(
         counts_by_source.items()
@@ -179,40 +196,54 @@ def print_summary(
     cancelled = sum(
         1
         for activity in activities
-        if activity.get("status") == "cancelled"
+        if activity.get(
+            "status"
+        ) == "cancelled"
     )
 
     tbd = sum(
         1
         for activity in activities
-        if activity.get("status") == "tbd"
+        if activity.get(
+            "status"
+        ) == "tbd"
     )
 
     missing_instructor = sum(
         1
         for activity in activities
-        if not activity.get("instructor")
+        if not activity.get(
+            "instructor"
+        )
     )
 
     missing_location = sum(
         1
         for activity in activities
-        if not activity.get("location")
+        if not activity.get(
+            "location"
+        )
     )
 
-    print("\nאיכות נתונים:")
+    print(
+        "\nאיכות נתונים:"
+    )
+
     print(
         "- cancelled:",
         cancelled,
     )
+
     print(
         "- tbd:",
         tbd,
     )
+
     print(
         "- ללא מדריך:",
         missing_instructor,
     )
+
     print(
         "- ללא מיקום:",
         missing_location,
@@ -235,7 +266,7 @@ def main() -> None:
         description=(
             "Ingestion for DOCX, Excel "
             "and external structured sources."
-            )
+        )
     )
 
     parser.add_argument(
@@ -294,57 +325,66 @@ def main() -> None:
         )
 
     if args.file is not None:
-        file_path = args.file.resolve()
+        file_path = (
+            args.file.resolve()
+        )
 
         if not file_path.exists():
             raise FileNotFoundError(
                 file_path
             )
 
-        if file_path.suffix.lower() == ".docx":
-
-            (
-                activities,
-                parser_name,
-                attempts,
-            ) = parse_universal_docx(
+        if (
+            file_path.suffix.lower()
+            == ".docx"
+        ):
+            activities = parse_ai_docx(
                 file_path
             )
 
-            activities = deduplicate_activities(
-                activities
+            activities = (
+                deduplicate_activities(
+                    activities
+                )
             )
 
             print(
-                f"\nExternal file: {file_path.name}"
+                f"\nExternal file: "
+                f"{file_path.name}"
             )
 
             print(
-                f"Parser selected: {parser_name}"
+                "Document processed "
+                "with AI extraction."
             )
 
         else:
-            activities = ingest_structured_file(
-                file_path,
-                sheet_name=args.sheet,
-                default_center_name=(
-                    args.center_name
-                ),
+            activities = (
+                ingest_structured_file(
+                    file_path,
+                    sheet_name=args.sheet,
+                    default_center_name=(
+                        args.center_name
+                    ),
+                )
             )
 
     elif args.api_url:
-
         api_key = os.getenv(
             args.api_key_env
         )
 
-        activities = ingest_external_source(
-            args.api_url,
-            api_key=api_key,
-            source_name=args.source_name,
-            default_center_name=(
-                args.center_name
-            ),
+        activities = (
+            ingest_external_source(
+                args.api_url,
+                api_key=api_key,
+                source_name=(
+                    args.source_name
+                ),
+                default_center_name=(
+                    args.center_name
+                ),
+            )
         )
 
     else:
@@ -359,7 +399,8 @@ def main() -> None:
     if not args.save:
         print(
             "\nDRY RUN: "
-            "Nothing was written to Supabase."
+            "Nothing was written "
+            "to Supabase."
         )
         return
 

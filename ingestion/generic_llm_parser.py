@@ -7,9 +7,11 @@
 המטרה היא לאפשר למערכת להתמודד גם עם מבני מסמכים חדשים
 מבלי להמציא מידע שחסר במקור
 """
+
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Literal
@@ -32,7 +34,7 @@ load_dotenv()
 
 
 # ---------------------------------------------------------
-# LLM output schema
+# מבנה הפלט של מודל השפה
 # ---------------------------------------------------------
 
 
@@ -100,7 +102,7 @@ class GenericDocumentExtraction(BaseModel):
 
 
 # ---------------------------------------------------------
-# Model
+# מודל השפה
 # ---------------------------------------------------------
 
 
@@ -115,7 +117,7 @@ EXTRACTOR = MODEL.with_structured_output(
 
 
 # ---------------------------------------------------------
-# Build document content
+# הכנת תוכן המסמך
 # ---------------------------------------------------------
 
 
@@ -151,8 +153,7 @@ def _build_document_content(
         indent=2,
     )
 
-    # Protect against accidentally sending a huge document
-    # in one request.
+    # מגבילה את גודל התוכן כדי למנוע שליחת מסמך גדול מדי בבקשה אחת
     max_chars = 40000
 
     if len(serialized) > max_chars:
@@ -164,7 +165,7 @@ def _build_document_content(
 
 
 # ---------------------------------------------------------
-# Normalization helpers
+# פונקציות תקנון
 # ---------------------------------------------------------
 
 
@@ -175,6 +176,7 @@ def _normalize_int(
     בודקת ערך מספרי
     ומסירה ערכים שליליים שאינם מתאימים לשדות הפעילות
     """
+
     if value is None:
         return None
 
@@ -182,6 +184,171 @@ def _normalize_int(
         return None
 
     return value
+
+
+def _normalize_activity_names(
+    candidate: GenericActivityCandidate,
+) -> tuple[
+    str | None,
+    str | None,
+    str | None,
+]:
+    """
+    מתקננת את שם הפעילות תוך שמירה על הטקסט המקורי
+
+    כאשר שם הפעילות דו לשוני
+    נשמר השם העברי כשם הראשי
+    והשם האנגלי נשמר בשדה הנפרד
+    """
+
+    raw_name = normalize_text(
+        candidate.raw_name
+        or candidate.name
+    )
+
+    if raw_name is None:
+        return None, None, None
+
+    english_name = normalize_text(
+        candidate.english_name
+    )
+
+    if "/" not in raw_name:
+        return (
+            raw_name,
+            raw_name,
+            english_name,
+        )
+
+    left, right = [
+        part.strip()
+        for part in raw_name.split(
+            "/",
+            maxsplit=1,
+        )
+    ]
+
+    hebrew_pattern = re.compile(
+        r"[\u0590-\u05FF]"
+    )
+
+    left_is_hebrew = bool(
+        hebrew_pattern.search(left)
+    )
+
+    right_is_hebrew = bool(
+        hebrew_pattern.search(right)
+    )
+
+    if (
+        left_is_hebrew
+        and not right_is_hebrew
+    ):
+        return (
+            left,
+            raw_name,
+            english_name or right,
+        )
+
+    if (
+        right_is_hebrew
+        and not left_is_hebrew
+    ):
+        return (
+            right,
+            raw_name,
+            english_name or left,
+        )
+
+    return (
+        raw_name,
+        raw_name,
+        english_name,
+    )
+
+
+def _remove_known_prefix(
+    value: str | None,
+    prefixes: tuple[str, ...],
+) -> str | None:
+    """
+    מסירה תוויות מוכרות מערכים שחולצו מהמסמך
+    מבלי לשנות את התוכן עצמו
+    """
+
+    cleaned = normalize_text(
+        value
+    )
+
+    if cleaned is None:
+        return None
+
+    for prefix in prefixes:
+        if cleaned.startswith(
+            prefix
+        ):
+            cleaned = cleaned[
+                len(prefix):
+            ].strip()
+
+            break
+
+    return cleaned or None
+
+
+def _normalize_branch_and_location(
+    branch_value: str | None,
+    location_value: str | None,
+) -> tuple[
+    str | None,
+    str | None,
+]:
+    """
+    מתקננת את הסניף והמיקום שהתקבלו מהמודל
+
+    הסניף נשמר רק כאשר נמצא ערך מפורש של סניף
+    ואם הסניף מופיע גם בתוך המיקום
+    הוא מוסר משדה המיקום כדי למנוע כפילות
+    """
+
+    branch = normalize_text(
+        branch_value
+    )
+
+    location = normalize_text(
+        location_value
+    )
+
+    known_branches = (
+        "סניף א'",
+        "סניף ב'",
+    )
+
+    normalized_branch: str | None = None
+
+    if branch in known_branches:
+        normalized_branch = branch
+
+    if location:
+        for known_branch in known_branches:
+            if known_branch in location:
+                normalized_branch = (
+                    normalized_branch
+                    or known_branch
+                )
+
+                location = re.sub(
+                    rf"\s*[–-]\s*{re.escape(known_branch)}\s*$",
+                    "",
+                    location,
+                ).strip()
+
+                break
+
+    return (
+        normalized_branch,
+        location or None,
+    )
 
 
 def _normalize_candidate(
@@ -201,14 +368,12 @@ def _normalize_candidate(
     אך הקוד הדטרמיניסטי אחראי על התקנון הסופי
     """
 
-    name = normalize_text(
-        candidate.name
-        or candidate.raw_name
-    )
-
-    raw_name = normalize_text(
-        candidate.raw_name
-        or candidate.name
+    (
+        name,
+        raw_name,
+        english_name,
+    ) = _normalize_activity_names(
+        candidate
     )
 
     raw_day = normalize_text(
@@ -233,8 +398,8 @@ def _normalize_candidate(
         candidate.end_time
     )
 
-    # If the model returned the original time string,
-    # let deterministic Python parse it too.
+    # אם המודל החזיר את שעת המקור
+    # הקוד הדטרמיניסטי מנסה לפענח אותה גם בעצמו
     if raw_time:
         parsed_start, parsed_end = (
             normalize_time_range(
@@ -248,12 +413,39 @@ def _normalize_candidate(
         if end_time is None:
             end_time = parsed_end
 
+    (
+        branch,
+        location,
+    ) = _normalize_branch_and_location(
+        candidate.branch,
+        candidate.location,
+    )
+
+    location = _remove_known_prefix(
+        location,
+        (
+            "אולם:",
+            "מיקום:",
+            "Room:",
+            "Location:",
+        ),
+    )
+
+    level = _remove_known_prefix(
+        candidate.level,
+        (
+            "רמת ",
+            "רמה:",
+            "Level:",
+        ),
+    )
+
     # --------------------------------------------------
-    # Required fields
+    # שדות חובה
     # --------------------------------------------------
     #
-    # We do not hallucinate these.
-    # An incomplete candidate is discarded.
+    # לא משלימים מידע הכרחי שאינו קיים
+    # פעילות חלקית נדחית ולא ממשיכה בתהליך
     #
 
     if not name:
@@ -269,7 +461,7 @@ def _normalize_candidate(
         return None
 
     # --------------------------------------------------
-    # End-time provenance
+    # מקור שעת הסיום
     # --------------------------------------------------
 
     if end_time is not None:
@@ -278,10 +470,11 @@ def _normalize_candidate(
         end_time_source = "missing"
 
     # --------------------------------------------------
-    # Audience
+    # קהל יעד
     # --------------------------------------------------
     #
-    # Unknown is better than inventing נשים / גברים.
+    # כאשר קהל היעד אינו מופיע במקור
+    # עדיף לשמור שלא צוין ולא להמציא ערך
     #
 
     target_audience = normalize_text(
@@ -292,7 +485,7 @@ def _normalize_candidate(
         target_audience = "לא צוין"
 
     # --------------------------------------------------
-    # Status
+    # סטטוס
     # --------------------------------------------------
 
     status = normalize_status(
@@ -304,9 +497,7 @@ def _normalize_candidate(
 
         "center_name": center_name,
 
-        "branch": normalize_text(
-            candidate.branch
-        ),
+        "branch": branch,
 
         "day": day,
 
@@ -335,17 +526,13 @@ def _normalize_candidate(
             or name
         ),
 
-        "english_name": normalize_text(
-            candidate.english_name
-        ),
+        "english_name": english_name,
 
         "instructor": normalize_text(
             candidate.instructor
         ),
 
-        "location": normalize_text(
-            candidate.location
-        ),
+        "location": location,
 
         "target_audience": (
             target_audience
@@ -359,9 +546,7 @@ def _normalize_candidate(
             candidate.max_age
         ),
 
-        "level": normalize_text(
-            candidate.level
-        ),
+        "level": level,
 
         "capacity": _normalize_int(
             candidate.capacity
@@ -388,7 +573,7 @@ def _normalize_candidate(
 
 
 # ---------------------------------------------------------
-# Deduplication
+# הסרת כפילויות
 # ---------------------------------------------------------
 
 
@@ -399,6 +584,7 @@ def _activity_key(
     יוצרת מפתח אחיד לזיהוי פעילויות כפולות
     לפי השדות המרכזיים של הפעילות
     """
+
     return (
         activity.get(
             "center_name"
@@ -438,6 +624,7 @@ def _deduplicate(
     מסירה פעילויות כפולות מתוצאת המודל
     כדי שאותה פעילות לא תופיע יותר מפעם אחת
     """
+
     seen: set[
         tuple[Any, ...]
     ] = set()
@@ -466,7 +653,7 @@ def _deduplicate(
 
 
 # ---------------------------------------------------------
-# Generic LLM extraction
+# חילוץ כללי באמצעות מודל השפה
 # ---------------------------------------------------------
 
 
@@ -626,7 +813,7 @@ DOCUMENT CONTENT
 
 
 # ---------------------------------------------------------
-# CLI test
+# בדיקה בהרצה ישירה
 # ---------------------------------------------------------
 
 
