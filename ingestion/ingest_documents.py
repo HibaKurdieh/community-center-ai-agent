@@ -30,8 +30,15 @@ if str(PROJECT_ROOT) not in sys.path:
 from database.activities_repository import (
     insert_new_activities,
 )
+from database.ingested_sources_repository import (
+    is_source_processed,
+    register_processed_source,
+)
 from ingestion.ai_docx_parser import (
     parse_ai_docx,
+)
+from ingestion.file_hash import (
+    calculate_file_hash,
 )
 from ingestion.source_ingestion import (
     ingest_external_source,
@@ -95,13 +102,74 @@ def deduplicate_activities(
     return unique
 
 
-def ingest_all_documents() -> list[dict[str, Any]]:
+def _process_docx_file(
+    file_path: Path,
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, Any] | None,
+]:
+    """
+    מעבדת קובץ וורד לפי טביעת התוכן שלו
+
+    אם טביעת התוכן כבר קיימת במסד הנתונים
+    הקובץ אינו נשלח שוב למודל השפה
+
+    אם הקובץ חדש הוא עובר את מסלול הפענוח
+    ורק תוצאה תקינה מוחזרת להמשך התהליך
+    """
+
+    file_hash = calculate_file_hash(
+        file_path
+    )
+
+    if is_source_processed(
+        file_hash
+    ):
+        print(
+            f"{file_path.name}: "
+            "already processed, skipping AI."
+        )
+
+        return [], None
+
+    activities = parse_ai_docx(
+        file_path
+    )
+
+    if not activities:
+        print(
+            f"{file_path.name}: "
+            "no valid activities extracted."
+        )
+
+        return [], None
+
+    source_record = {
+        "source_file": file_path.name,
+        "file_hash": file_hash,
+        "activities_count": len(
+            activities
+        ),
+    }
+
+    return (
+        activities,
+        source_record,
+    )
+
+
+def ingest_all_documents() -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     """
     מאתרת את כל קובצי הוורד בתיקיית המרצה
 
-    כל מסמך מועבר לפענוח סמנטי באמצעות מודל השפה
-    ולאחר מכן עובר תקנון ובדיקת תקינות
-    לפני שהוא מצורף לתוצאה המאוחדת
+    לפני שליחת מסמך למודל השפה
+    נבדקת טביעת התוכן שלו מול מסד הנתונים
+
+    מסמך שכבר עובד בעבר אינו נשלח שוב למודל
+    ומסמך חדש עובר פענוח תקנון ובדיקת תקינות
     """
 
     file_paths = sorted(
@@ -114,9 +182,14 @@ def ingest_all_documents() -> list[dict[str, Any]]:
         print(
             "⚠ No DOCX files found."
         )
-        return []
+
+        return [], []
 
     all_activities: list[
+        dict[str, Any]
+    ] = []
+
+    processed_sources: list[
         dict[str, Any]
     ] = []
 
@@ -127,21 +200,35 @@ def ingest_all_documents() -> list[dict[str, Any]]:
     )
 
     for file_path in file_paths:
-        activities = parse_ai_docx(
+        (
+            activities,
+            source_record,
+        ) = _process_docx_file(
             file_path
         )
+
+        if not activities:
+            continue
 
         all_activities.extend(
             activities
         )
+
+        if source_record is not None:
+            processed_sources.append(
+                source_record
+            )
 
         print(
             f"{file_path.name}: "
             f"{len(activities)} activities"
         )
 
-    return deduplicate_activities(
-        all_activities
+    return (
+        deduplicate_activities(
+            all_activities
+        ),
+        processed_sources,
     )
 
 
@@ -315,6 +402,10 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    processed_sources: list[
+        dict[str, Any]
+    ] = []
+
     if (
         args.file is not None
         and args.api_url
@@ -338,7 +429,10 @@ def main() -> None:
             file_path.suffix.lower()
             == ".docx"
         ):
-            activities = parse_ai_docx(
+            (
+                activities,
+                source_record,
+            ) = _process_docx_file(
                 file_path
             )
 
@@ -348,15 +442,21 @@ def main() -> None:
                 )
             )
 
+            if source_record is not None:
+                processed_sources.append(
+                    source_record
+                )
+
             print(
                 f"\nExternal file: "
                 f"{file_path.name}"
             )
 
-            print(
-                "Document processed "
-                "with AI extraction."
-            )
+            if activities:
+                print(
+                    "Document processed "
+                    "with AI extraction."
+                )
 
         else:
             activities = (
@@ -388,9 +488,10 @@ def main() -> None:
         )
 
     else:
-        activities = (
-            ingest_all_documents()
-        )
+        (
+            activities,
+            processed_sources,
+        ) = ingest_all_documents()
 
     print_summary(
         activities
@@ -412,6 +513,19 @@ def main() -> None:
         activities
     )
 
+    for source in processed_sources:
+        register_processed_source(
+            source_file=source[
+                "source_file"
+            ],
+            file_hash=source[
+                "file_hash"
+            ],
+            activities_count=source[
+                "activities_count"
+            ],
+        )
+
     print(
         "\n=== Supabase Result ==="
     )
@@ -430,6 +544,12 @@ def main() -> None:
         "Duplicates:",
         stats["duplicates"],
     )
+
+    if processed_sources:
+        print(
+            "Sources registered:",
+            len(processed_sources),
+        )
 
 
 if __name__ == "__main__":
