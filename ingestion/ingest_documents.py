@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,11 @@ from database.activities_repository import (
 from ingestion.universal_docx_parser import (
     parse_universal_docx,
 )
+from ingestion.source_ingestion import (
+    ingest_external_source,
+    ingest_structured_file,
+)
+
 LECTURER_DATA_DIR = (
     PROJECT_ROOT
     / "data"
@@ -129,7 +135,6 @@ def ingest_all_documents() -> list[dict[str, Any]]:
     return deduplicate_activities(
         all_activities
     )
-
 
 
 def print_summary(
@@ -246,11 +251,47 @@ def main() -> None:
         "--file",
         type=Path,
         help=(
-            "Path to a single external DOCX file."
+            "Path to a DOCX or Excel file."
         ),
     )
 
+    parser.add_argument(
+        "--api-url",
+        type=str,
+    )
+
+    parser.add_argument(
+        "--sheet",
+        type=str,
+    )
+
+    parser.add_argument(
+        "--center-name",
+        type=str,
+    )
+
+    parser.add_argument(
+        "--source-name",
+        type=str,
+        default="external_api",
+    )
+
+    parser.add_argument(
+        "--api-key-env",
+        type=str,
+        default="EXTERNAL_API_KEY",
+    )
+
     args = parser.parse_args()
+
+    if (
+        args.file is not None
+        and args.api_url
+    ):
+        raise ValueError(
+            "יש לבחור מקור אחד בלבד "
+            "קובץ או מקור חיצוני"
+        )
 
     if args.file is not None:
         file_path = args.file.resolve()
@@ -260,29 +301,50 @@ def main() -> None:
                 file_path
             )
 
-        if file_path.suffix.lower() != ".docx":
-            raise ValueError(
-                "Only DOCX files are supported."
+        if file_path.suffix.lower() == ".docx":
+
+            (
+                activities,
+                parser_name,
+                attempts,
+            ) = parse_universal_docx(
+                file_path
             )
 
-        (
-            activities,
-            parser_name,
-            attempts,
-        ) = parse_universal_docx(
-            file_path
+            activities = deduplicate_activities(
+                activities
+            )
+
+            print(
+                f"\nExternal file: {file_path.name}"
+            )
+
+            print(
+                f"Parser selected: {parser_name}"
+            )
+
+        else:
+            activities = ingest_structured_file(
+                file_path,
+                sheet_name=args.sheet,
+                default_center_name=(
+                    args.center_name
+                ),
+            )
+
+    elif args.api_url:
+
+        api_key = os.getenv(
+            args.api_key_env
         )
 
-        activities = deduplicate_activities(
-            activities
-        )
-
-        print(
-            f"\nExternal file: {file_path.name}"
-        )
-
-        print(
-            f"Parser selected: {parser_name}"
+        activities = ingest_external_source(
+            args.api_url,
+            api_key=api_key,
+            source_name=args.source_name,
+            default_center_name=(
+                args.center_name
+            ),
         )
 
     else:

@@ -43,6 +43,7 @@ VALID_SOURCE_LANGUAGES = {
 VALID_END_TIME_SOURCES = {
     "explicit",
     "inferred_source_rule",
+    "inferred_duration",
     "missing",
 }
 
