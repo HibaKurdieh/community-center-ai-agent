@@ -554,3 +554,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# python -m ingestion.ingest_documents --save
+# python -m ingestion.ingest_documents --file "C:\...\file.xlsx" --save
+# python -m ingestion.ingest_documents --api-url "https://..." --save
