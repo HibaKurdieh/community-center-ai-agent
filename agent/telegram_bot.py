@@ -20,7 +20,10 @@ from telegram.ext import (
     filters,
 )
 
-from graph import graph
+from graph import (
+    delete_conversation_thread,
+    graph,
+)
 from tools import format_activity_hebrew
 
 
@@ -499,12 +502,11 @@ def _is_stop_more_request(
 # ---------------------------------------------------------
 
 """
-בונה מזהה שיחה ייחודי לפי המשתמש והשיחה בטלגרם
-כדי שלנגרף ישמור זיכרון נפרד לכל שיחה פעילה
+בונה מזהה שיחה קבוע לפי המשתמש והשיחה בטלגרם
+כדי שלנגרף יוכל לטעון את אותו זיכרון גם לאחר הפעלה מחדש
 """
 def _get_conversation_thread_id(
     update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
 ) -> str:
     chat = update.effective_chat
     user = update.effective_user
@@ -521,18 +523,10 @@ def _get_conversation_thread_id(
         else 0
     )
 
-    generation = int(
-        context.user_data.get(
-            "memory_thread_generation",
-            0,
-        )
-    )
-
     return (
         f"telegram:"
         f"{chat_id}:"
-        f"{user_id}:"
-        f"{generation}"
+        f"{user_id}"
     )
 
 
@@ -557,36 +551,26 @@ def _reset_pagination(
 
 
 """
-מאפסת את מצב השיחה המקומי של טלגרם
-ופותחת זיכרון חדש בלנגרף לחיפוש הבא
+מוחקת את זיכרון השיחה הקבוע מלנגרף
+ומאפסת את מצב התצוגה המקומי של טלגרם
 """
-def _reset_conversation_state(
+async def _reset_conversation_state(
+    update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
     _reset_pagination(
         context
     )
 
-    context.user_data[
-        "has_active_context"
-    ] = False
-
-    context.user_data[
-        "waiting_for_clarification"
-    ] = False
-
-    current_generation = int(
-        context.user_data.get(
-            "memory_thread_generation",
-            0,
+    thread_id = (
+        _get_conversation_thread_id(
+            update
         )
     )
 
-    context.user_data[
-        "memory_thread_generation"
-    ] = (
-        current_generation
-        + 1
+    await asyncio.to_thread(
+        delete_conversation_thread,
+        thread_id,
     )
 
 
@@ -783,8 +767,11 @@ async def start_command(
     if message is None:
         return
 
-    _reset_conversation_state(
-        context
+    await _reset_conversation_state(
+        update=
+            update,
+        context=
+            context,
     )
 
     await message.reply_text(
@@ -820,7 +807,7 @@ async def help_command(
 
 """
 מאפסת את מצב השיחה והחיפוש של המשתמש
-ומאפשרת להתחיל חיפוש חדש ללא הזיכרון הקודם
+ומוחקת את הזיכרון הקבוע שנשמר בלנגרף
 """
 async def reset_command(
     update: Update,
@@ -833,8 +820,11 @@ async def reset_command(
     if message is None:
         return
 
-    _reset_conversation_state(
-        context
+    await _reset_conversation_state(
+        update=
+            update,
+        context=
+            context,
     )
 
     await message.reply_text(
@@ -1038,10 +1028,7 @@ async def _process_user_message(
 
         thread_id = (
             _get_conversation_thread_id(
-                update=
-                    update,
-                context=
-                    context,
+                update
             )
         )
 
@@ -1129,21 +1116,6 @@ async def _process_user_message(
         # -------------------------------------------------
         # שמירת מצב תצוגה בלבד
         # -------------------------------------------------
-
-        context.user_data[
-            "waiting_for_clarification"
-        ] = (
-            waiting_for_clarification
-        )
-
-        context.user_data[
-            "has_active_context"
-        ] = bool(
-            waiting_for_clarification
-            or result.get(
-                "intent"
-            ) == "activity"
-        )
 
         if has_more_results:
             context.user_data[
@@ -1384,8 +1356,11 @@ async def handle_button(
             "🔄 חיפוש חדש"
         )
 
-        _reset_conversation_state(
-            context
+        await _reset_conversation_state(
+            update=
+                update,
+            context=
+                context,
         )
 
         await message.reply_text(
@@ -1445,13 +1420,6 @@ async def handle_button(
     # קביעת משמעות הכפתור
     # -----------------------------------------------------
 
-    has_context = bool(
-        context.user_data.get(
-            "has_active_context",
-            False,
-        )
-    )
-
     waiting_for_more = bool(
         context.user_data.get(
             "waiting_for_more",
@@ -1498,8 +1466,6 @@ async def handle_button(
 
         semantic_message = (
             "ומה היום?"
-            if has_context
-            else "מה יש היום?"
         )
 
     elif data == CB_TOMORROW:
@@ -1509,8 +1475,6 @@ async def handle_button(
 
         semantic_message = (
             "ומה מחר?"
-            if has_context
-            else "מה יש מחר?"
         )
 
     elif data == CB_MORNING:
@@ -1520,8 +1484,6 @@ async def handle_button(
 
         semantic_message = (
             "ומה בבוקר?"
-            if has_context
-            else "מה יש בבוקר?"
         )
 
     elif data == CB_EVENING:
@@ -1531,8 +1493,6 @@ async def handle_button(
 
         semantic_message = (
             "ומה בערב?"
-            if has_context
-            else "מה יש בערב?"
         )
 
     else:

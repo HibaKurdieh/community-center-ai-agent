@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import atexit
+import os
 import sys
 from typing import Literal
+from uuid import uuid4
 
-from langgraph.checkpoint.memory import InMemorySaver
+from dotenv import load_dotenv
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, START, StateGraph
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from conversation import (
     build_query_from_state,
@@ -24,14 +30,93 @@ from tools import (
 )
 
 
+load_dotenv()
+
 RESULT_LIMIT = 5
 
 
 # ---------------------------------------------------------
-# זיכרון קצר טווח של השיחה
+# זיכרון קבוע של השיחה
 # ---------------------------------------------------------
 
-checkpointer = InMemorySaver()
+"""
+קוראת את כתובת החיבור למסד הנתונים
+ומוודאת שהיא קיימת לפני בניית זיכרון השיחה
+"""
+def _get_database_url() -> str:
+    database_url = os.getenv(
+        "DATABASE_URL"
+    )
+
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL לא נמצא "
+            "יש לבדוק את קובץ .env"
+        )
+
+    return database_url
+
+
+"""
+בונה מאגר חיבורים קבוע למסד הנתונים
+כדי לאפשר ללנגרף לשמור את זיכרון השיחה בצורה יציבה
+"""
+def _build_database_pool() -> ConnectionPool:
+    pool = ConnectionPool(
+        conninfo=
+            _get_database_url(),
+        min_size=1,
+        max_size=5,
+        kwargs={
+            "autocommit": True,
+            "prepare_threshold": 0,
+            "row_factory": dict_row,
+        },
+        open=True,
+    )
+
+    pool.wait()
+
+    return pool
+
+
+os.environ.setdefault(
+    "LANGGRAPH_STRICT_MSGPACK",
+    "true",
+)
+
+database_pool = (
+    _build_database_pool()
+)
+
+atexit.register(
+    database_pool.close
+)
+
+checkpointer = PostgresSaver(
+    database_pool
+)
+
+checkpointer.setup()
+
+
+"""
+מוחקת את כל הזיכרון השמור של שיחה מסוימת
+כדי לאפשר התחלה חדשה באמת גם לאחר הפעלה מחדש של הבוט
+"""
+def delete_conversation_thread(
+    thread_id: str,
+) -> None:
+    clean_thread_id = (
+        thread_id.strip()
+    )
+
+    if not clean_thread_id:
+        return
+
+    checkpointer.delete_thread(
+        clean_thread_id
+    )
 
 
 # ---------------------------------------------------------
@@ -1187,6 +1272,10 @@ if __name__ == "__main__":
 
     _ensure_utf8_stdout()
 
+    test_run_id = (
+        uuid4().hex
+    )
+
     test_questions = [
 
         # -------------------------------------------------
@@ -1248,7 +1337,7 @@ if __name__ == "__main__":
         config = {
             "configurable": {
                 "thread_id":
-                    f"manual-test-{index}"
+                    f"manual-test-{test_run_id}-{index}"
             }
         }
 
@@ -1447,7 +1536,7 @@ if __name__ == "__main__":
         config = {
             "configurable": {
                 "thread_id":
-                    f"conversation-test-{conversation_index}"
+                    f"conversation-test-{test_run_id}-{conversation_index}"
             }
         }
 
