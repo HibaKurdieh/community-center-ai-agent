@@ -1031,6 +1031,21 @@ action="follow_up"
 query_fragment="ביום רביעי בערב"
 clear_fields=[]
 
+מצב קודם
+חוגים ביום שלישי בערב
+
+הודעה
+פילאטיס ביום שלישי בערב
+
+action="new_query"
+query_fragment=None
+clear_fields=[]
+
+כאשר המשתמש כותב בקשת חיפוש מלאה ועצמאית
+שכוללת סוג חוג יחד עם יום שעה מרכז מדריך או תנאי נוסף
+יש לבחור new_query
+גם אם ההודעה קצרה
+
 כאשר המשתמש מבקש לבטל תנאי קודם
 יש להחזיר אותו ב clear_fields
 
@@ -1207,7 +1222,6 @@ clear_fields מיועד רק לתנאים שהמשתמש ביקש להסיר
         )
 
 
-
 def _parse_follow_up_fragment(
     query_fragment: str,
 ) -> dict[str, Any]:
@@ -1256,7 +1270,6 @@ def _parse_follow_up_fragment(
         "instructor":
             parsed.instructor,
     }
-
 
 
 def merge_follow_up(
@@ -1421,9 +1434,50 @@ def should_check_conversation_context(
     ):
         return True
 
+    fragment_starts = [
+        "ביום ",
+        "בבוקר",
+        "בערב",
+        "בצהריים",
+        "בלילה",
+        "במרכז ",
+        "מרכז ",
+        "בסניף ",
+        "במיקום ",
+        "עם המדריך ",
+        "עם מדריך ",
+        "מדריך ",
+        "לגיל ",
+        "לקהל ",
+    ]
+
+    if any(
+        normalized.startswith(
+            signal
+        )
+        for signal in fragment_starts
+    ):
+        return True
+
+    weekdays = {
+        "ראשון",
+        "שני",
+        "שלישי",
+        "רביעי",
+        "חמישי",
+        "שישי",
+        "שבת",
+    }
+
+    if (
+        words
+        and words[0] in weekdays
+    ):
+        return True
+
     if len(
         words
-    ) <= 4:
+    ) == 1:
         return True
 
     return False
