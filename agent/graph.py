@@ -3,8 +3,16 @@ from __future__ import annotations
 import sys
 from typing import Literal
 
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
+from conversation import (
+    build_query_from_state,
+    classify_conversation_message,
+    has_meaningful_search_filters,
+    merge_follow_up,
+    should_check_conversation_context,
+)
 from request_parser import (
     parse_user_request,
     reinterpret_unclear_request,
@@ -20,8 +28,229 @@ RESULT_LIMIT = 5
 
 
 # ---------------------------------------------------------
-# Node 1: Understand request using LLM
+# זיכרון קצר טווח של השיחה
 # ---------------------------------------------------------
+
+checkpointer = InMemorySaver()
+
+
+# ---------------------------------------------------------
+# הכנת הודעה לפי זיכרון השיחה
+# ---------------------------------------------------------
+
+"""
+בודקת אם ההודעה החדשה היא המשך של חיפוש קודם
+ומשלבת אותה עם המידע שנשמר בזיכרון כאשר נדרש
+"""
+def prepare_conversation_request(
+    state: AgentState,
+) -> dict:
+
+    user_message = (
+        state.get(
+            "user_message",
+            "",
+        ).strip()
+    )
+
+    if not user_message:
+        return {
+            "conversation_action":
+                "new_query",
+            "query_fragment":
+                None,
+            "clear_fields":
+                [],
+        }
+
+    previous_state = dict(
+        state
+    )
+
+    waiting_for_clarification = bool(
+        state.get(
+            "waiting_for_clarification",
+            False,
+        )
+    )
+
+    has_previous_filters = (
+        has_meaningful_search_filters(
+            previous_state
+        )
+    )
+
+    if waiting_for_clarification:
+
+        decision = (
+            classify_conversation_message(
+                user_message=
+                    user_message,
+                previous_state=
+                    previous_state,
+                waiting_for_more=
+                    False,
+                waiting_for_clarification=
+                    True,
+            )
+        )
+
+        if (
+            decision.action
+            == "use_known_filters"
+            and has_previous_filters
+        ):
+
+            return {
+                "user_message":
+                    build_query_from_state(
+                        previous_state
+                    ),
+                "conversation_action":
+                    "use_known_filters",
+                "query_fragment":
+                    None,
+                "clear_fields":
+                    [],
+            }
+
+        if decision.action == "follow_up":
+
+            fragment = (
+                decision.query_fragment
+                or user_message
+            )
+
+            if (
+                decision.clear_fields
+                and decision.query_fragment
+                is None
+            ):
+                fragment = None
+
+            merged_query = (
+                merge_follow_up(
+                    previous_state=
+                        previous_state,
+                    query_fragment=
+                        fragment,
+                    clear_fields=
+                        list(
+                            decision.clear_fields
+                        ),
+                )
+            )
+
+            return {
+                "user_message":
+                    merged_query,
+                "conversation_action":
+                    "follow_up",
+                "query_fragment":
+                    decision.query_fragment,
+                "clear_fields":
+                    list(
+                        decision.clear_fields
+                    ),
+            }
+
+        return {
+            "conversation_action":
+                decision.action,
+            "query_fragment":
+                decision.query_fragment,
+            "clear_fields":
+                list(
+                    decision.clear_fields
+                ),
+        }
+
+    if (
+        has_previous_filters
+        and should_check_conversation_context(
+            user_message,
+            previous_state,
+        )
+    ):
+
+        decision = (
+            classify_conversation_message(
+                user_message=
+                    user_message,
+                previous_state=
+                    previous_state,
+                waiting_for_more=
+                    False,
+                waiting_for_clarification=
+                    False,
+            )
+        )
+
+        if decision.action == "follow_up":
+
+            fragment = (
+                decision.query_fragment
+                or user_message
+            )
+
+            if (
+                decision.clear_fields
+                and decision.query_fragment
+                is None
+            ):
+                fragment = None
+
+            merged_query = (
+                merge_follow_up(
+                    previous_state=
+                        previous_state,
+                    query_fragment=
+                        fragment,
+                    clear_fields=
+                        list(
+                            decision.clear_fields
+                        ),
+                )
+            )
+
+            return {
+                "user_message":
+                    merged_query,
+                "conversation_action":
+                    "follow_up",
+                "query_fragment":
+                    decision.query_fragment,
+                "clear_fields":
+                    list(
+                        decision.clear_fields
+                    ),
+            }
+
+        return {
+            "conversation_action":
+                decision.action,
+            "query_fragment":
+                decision.query_fragment,
+            "clear_fields":
+                list(
+                    decision.clear_fields
+                ),
+        }
+
+    return {
+        "conversation_action":
+            "new_query",
+        "query_fragment":
+            None,
+        "clear_fields":
+            [],
+    }
+
+
+# ---------------------------------------------------------
+# ניתוח בקשת המשתמש
+# ---------------------------------------------------------
+
 """
 מנתחת את בקשת המשתמש
 ומחלצת ממנה את פרטי החיפוש למצב המשותף
@@ -30,13 +259,13 @@ def understand_request(
     state: AgentState,
 ) -> dict:
     """
-    מנתח את בקשת המשתמש באמצעות ה-LLM.
+    מנתח את בקשת המשתמש באמצעות מודל השפה
 
-    אם הבקשה ברורה:
-    ממשיכים לחיפוש.
+    אם הבקשה ברורה
+    ממשיכים לחיפוש
 
-    אם הבקשה אינה ברורה:
-    ה-Graph יעביר אותה לשלב fallback.
+    אם הבקשה אינה ברורה
+    הגרף יעביר אותה לשלב ניסיון ההבנה הנוסף
     """
 
     user_message = (
@@ -101,8 +330,9 @@ def understand_request(
 
 
 # ---------------------------------------------------------
-# Router after initial parsing
+# החלטה לאחר הניתוח הראשוני
 # ---------------------------------------------------------
+
 """
 מחליטה לאיזה שלב להמשיך לאחר הניתוח הראשוני
 לפי סוג הבקשה ורמת הביטחון בהבנה
@@ -115,9 +345,9 @@ def route_after_understanding(
     "clarification_node",
 ]:
     """
-    מחליט האם אפשר כבר לחפש,
-    האם צריך fallback,
-    או האם כבר קיימת בקשת הבהרה.
+    מחליט האם אפשר כבר לחפש
+    האם צריך ניסיון הבנה נוסף
+    או האם כבר קיימת בקשת הבהרה
     """
 
     if state.get(
@@ -148,8 +378,9 @@ def route_after_understanding(
 
 
 # ---------------------------------------------------------
-# Fallback node
+# ניסיון הבנה נוסף
 # ---------------------------------------------------------
+
 """
 מבצעת ניסיון נוסף להבין בקשה שלא הובנה מספיק
 ושומרת מידע שכבר זוהה בניתוח הראשון
@@ -238,8 +469,9 @@ def fallback_node(
 
 
 # ---------------------------------------------------------
-# Router after fallback
+# החלטה לאחר ניסיון ההבנה הנוסף
 # ---------------------------------------------------------
+
 """
 מחליטה כיצד להמשיך לאחר ניסיון ההבנה הנוסף
 אם הבקשה ברורה ממשיכים לחיפוש אחרת מבקשים הבהרה
@@ -251,10 +483,10 @@ def route_after_fallback(
     "clarification_node",
 ]:
     """
-    אם ה-fallback הצליח להבין את הבקשה,
-    ממשיכים לחיפוש.
+    אם ניסיון ההבנה הנוסף הצליח להבין את הבקשה
+    ממשיכים לחיפוש
 
-    אחרת מבקשים הבהרה מהמשתמש.
+    אחרת מבקשים הבהרה מהמשתמש
     """
 
     intent = state.get(
@@ -279,8 +511,9 @@ def route_after_fallback(
 
 
 # ---------------------------------------------------------
-# Clarification node
+# בקשת הבהרה
 # ---------------------------------------------------------
+
 """
 בונה שאלת הבהרה כאשר אין מספיק מידע לחיפוש
 ושומרת את הפרטים שכבר הובנו מהבקשה
@@ -291,7 +524,7 @@ def clarification_node(
     known_parts: list[str] = []
 
     # -----------------------------------------------------
-    # Day
+    # יום
     # -----------------------------------------------------
 
     day = state.get(
@@ -304,7 +537,7 @@ def clarification_node(
         )
 
     # -----------------------------------------------------
-    # Time
+    # זמן
     # -----------------------------------------------------
 
     start_after = state.get(
@@ -367,7 +600,7 @@ def clarification_node(
         )
 
     # -----------------------------------------------------
-    # Center
+    # מרכז
     # -----------------------------------------------------
 
     center_name = state.get(
@@ -380,7 +613,7 @@ def clarification_node(
         )
 
     # -----------------------------------------------------
-    # Branch
+    # סניף
     # -----------------------------------------------------
 
     branch = state.get(
@@ -393,7 +626,7 @@ def clarification_node(
         )
 
     # -----------------------------------------------------
-    # Instructor
+    # מדריך
     # -----------------------------------------------------
 
     instructor = state.get(
@@ -406,7 +639,7 @@ def clarification_node(
         )
 
     # -----------------------------------------------------
-    # Location
+    # מיקום
     # -----------------------------------------------------
 
     location = state.get(
@@ -419,7 +652,7 @@ def clarification_node(
         )
 
     # -----------------------------------------------------
-    # Audience
+    # קהל יעד
     # -----------------------------------------------------
 
     target_audience = state.get(
@@ -432,7 +665,7 @@ def clarification_node(
         )
 
     # -----------------------------------------------------
-    # Age
+    # גיל
     # -----------------------------------------------------
 
     age = state.get(
@@ -445,7 +678,7 @@ def clarification_node(
         )
 
     # -----------------------------------------------------
-    # Build question
+    # בניית שאלת ההבהרה
     # -----------------------------------------------------
 
     if known_parts:
@@ -483,8 +716,9 @@ def clarification_node(
 
 
 # ---------------------------------------------------------
-# Age-result helpers
+# פונקציות עזר להתאמת גיל
 # ---------------------------------------------------------
+
 """
 סופרת את תוצאות החיפוש לפי רמת הוודאות של התאמת הגיל
 ומבדילה בין התאמה ידועה לבין מידע גיל חסר
@@ -514,6 +748,7 @@ def _count_age_statuses(
         unknown_count,
     )
 
+
 """
 בונה הסבר למשתמש כאשר החיפוש כולל גיל
 ומבהירה אילו תוצאות מאומתות ואילו חסרות מידע גיל
@@ -523,20 +758,16 @@ def _activity_age_summary(
     results: list[dict],
 ) -> str | None:
     """
-    בונה הסבר ברור כאשר המשתמש ציין גיל.
+    בונה הסבר ברור כאשר המשתמש ציין גיל
 
-    חשוב להבדיל בין:
+    כאשר קיים מידע גיל במקור
+    אפשר לאשר התאמה
 
-    match:
-    יש מידע גיל במקור
-    שמאשר התאמה.
+    כאשר אין טווח גיל במקור
+    אי אפשר לאשר התאמה
 
-    unknown:
-    אין טווח גיל במקור,
-    ולכן אי אפשר לאשר התאמה.
-
-    תוצאות no_match כבר נפסלו
-    בתוך search_activities.
+    תוצאות שאינן מתאימות לגיל
+    כבר נפסלות בתוך פעולת החיפוש
     """
 
     requested_age = state.get(
@@ -554,7 +785,7 @@ def _activity_age_summary(
     )
 
     # -----------------------------------------------------
-    # All results have explicit matching age information
+    # כל התוצאות כוללות התאמת גיל מפורשת
     # -----------------------------------------------------
 
     if (
@@ -574,7 +805,7 @@ def _activity_age_summary(
         )
 
     # -----------------------------------------------------
-    # Some explicit matches + some unknown
+    # קיימות התאמות מפורשות וגם תוצאות ללא מידע גיל
     # -----------------------------------------------------
 
     if (
@@ -608,7 +839,7 @@ def _activity_age_summary(
         )
 
     # -----------------------------------------------------
-    # No explicit matches, only unknown age
+    # אין התאמות מפורשות וקיימות רק תוצאות ללא מידע גיל
     # -----------------------------------------------------
 
     if (
@@ -627,8 +858,9 @@ def _activity_age_summary(
 
 
 # ---------------------------------------------------------
-# Limited answer helper
+# בניית תשובה מוגבלת
 # ---------------------------------------------------------
+
 """
 בונה תשובה שמציגה מספר מוגבל של תוצאות
 ומציינת כאשר קיימות תוצאות נוספות
@@ -639,7 +871,7 @@ def _build_limited_answer(
     prefix: str | None = None,
 ) -> str:
     """
-    בונה תשובה עם עד RESULT_LIMIT תוצאות.
+    בונה תשובה עם מספר מוגבל של תוצאות
     """
 
     visible_results = (
@@ -678,8 +910,9 @@ def _build_limited_answer(
 
 
 # ---------------------------------------------------------
-# Activity node
+# ביצוע חיפוש הפעילויות
 # ---------------------------------------------------------
+
 """
 מבצעת את חיפוש הפעילויות לפי התנאים שנשמרו
 ומכינה את התשובה הסופית להצגה למשתמש
@@ -722,7 +955,7 @@ def activity_node(
     )
 
     # -----------------------------------------------------
-    # No results
+    # אין תוצאות
     # -----------------------------------------------------
 
     if not results:
@@ -755,7 +988,7 @@ def activity_node(
         }
 
     # -----------------------------------------------------
-    # Format results
+    # עיצוב התוצאות
     # -----------------------------------------------------
 
     formatted_results = [
@@ -766,7 +999,7 @@ def activity_node(
     ]
 
     # -----------------------------------------------------
-    # Age explanation
+    # הסבר התאמת גיל
     # -----------------------------------------------------
 
     age_summary = (
@@ -777,7 +1010,7 @@ def activity_node(
     )
 
     # -----------------------------------------------------
-    # Build final answer
+    # בניית התשובה הסופית
     # -----------------------------------------------------
 
     final_answer = (
@@ -805,41 +1038,50 @@ def activity_node(
 
 
 # ---------------------------------------------------------
-# Build graph
-
-# LangGraph Flow
+# בניית תרשים הזרימה
 # ---------------------------------------------------------
 #
-# START
+# התחלה
 #   │
-#   │  Edge רגיל
 #   ▼
-# understand_request
+# הכנת ההודעה לפי זיכרון השיחה
 #   │
-#   │  Conditional Edges
-#   ├───────────────► activity_node ─────────► END
+#   ▼
+# ניתוח הבקשה
 #   │
-#   ├───────────────► clarification_node ────► END
+#   ├───────────────► חיפוש ─────────► סיום
 #   │
-#   └───────────────► fallback_node
+#   ├───────────────► הבהרה ─────────► סיום
+#   │
+#   └───────────────► ניסיון הבנה נוסף
 #                          │
-#                          │  Conditional Edges
-#                          ├────────► activity_node ───────► END
+#                          ├────────► חיפוש ───────► סיום
 #                          │
-#                          └────────► clarification_node ─► END
+#                          └────────► הבהרה ──────► סיום
 #
+# המצב הוא המידע המשותף שעובר בין שלבי העבודה
+# ומתעדכן לאורך הזרימה
+#
+# המעברים מגדירים לאיזה שלב עוברים
+# לאחר סיום כל שלב
 
-# מצב: המידע המשותף שעובר בין שלבי העבודה ומתעדכן לאורך הזרימה.
-
-# מעבר: החיבור שמגדיר לאיזה שלב עוברים אחרי שלב מסוים.
 """
 בונה את תרשים הזרימה של הסוכן
-ומחברת בין שלבי ההבנה החיפוש ההבהרה והניסיון הנוסף
+ומחברת בין זיכרון השיחה
+שלבי ההבנה
+החיפוש
+ההבהרה
+והניסיון הנוסף
 """
 def build_graph():
 
     builder = StateGraph(
         AgentState
+    )
+
+    builder.add_node(
+        "prepare_conversation_request",
+        prepare_conversation_request,
     )
 
     builder.add_node(
@@ -864,6 +1106,11 @@ def build_graph():
 
     builder.add_edge(
         START,
+        "prepare_conversation_request",
+    )
+
+    builder.add_edge(
+        "prepare_conversation_request",
         "understand_request",
     )
 
@@ -901,20 +1148,24 @@ def build_graph():
         END,
     )
 
-    return builder.compile()
+    return builder.compile(
+        checkpointer=checkpointer
+    )
 
 
 graph = build_graph()
 
 
 # ---------------------------------------------------------
-# Terminal support
+# התאמת הצגת עברית במסוף
 # ---------------------------------------------------------
+
 """
 מגדירה קידוד מתאים להצגת טקסט בעברית במסוף
 כאשר המערכת מופעלת בסביבת חלונות
 """
 def _ensure_utf8_stdout() -> None:
+
     if sys.platform == "win32":
         try:
             sys.stdout.reconfigure(
@@ -929,30 +1180,35 @@ def _ensure_utf8_stdout() -> None:
 
 
 # ---------------------------------------------------------
-# Manual tests
+# בדיקות ידניות
 # ---------------------------------------------------------
 
 if __name__ == "__main__":
+
     _ensure_utf8_stdout()
 
     test_questions = [
+
         # -------------------------------------------------
-        # Normal
+        # בקשות רגילות
         # -------------------------------------------------
+
         "מה יש היום?",
         "אילו חוגים יש במרכז הדס?",
         "אילו חוגים משה מעביר?",
         "אילו חוגים יש ביום שלישי אחרי 18:00?",
 
         # -------------------------------------------------
-        # Category
+        # סוגי חוגים
         # -------------------------------------------------
+
         "פילאטיס",
         "יוגה",
 
         # -------------------------------------------------
-        # Spelling errors
+        # שגיאות כתיב
         # -------------------------------------------------
+
         "אילו חוגים יש ביום שלשי?",
         "אילו חוגים יש במרקז הדס?",
         "איזה חוגים יש בשלשי ארב?",
@@ -960,8 +1216,9 @@ if __name__ == "__main__":
         "מה יש ברבעי בבקר?",
 
         # -------------------------------------------------
-        # Vague -> clarification
+        # בקשות כלליות שדורשות הבהרה
         # -------------------------------------------------
+
         "אני רוצה משהו בערב",
         "אני רוצה משהו ביום רביעי",
         "אני מחפש משהו בבוקר",
@@ -969,25 +1226,38 @@ if __name__ == "__main__":
         "בא לי משהו בערב",
 
         # -------------------------------------------------
-        # Important semantic typo test
+        # בדיקת שגיאת כתיב עם משמעות
         # -------------------------------------------------
+
         "אני רוצה משהו ביום רבעי בבקר לגברים",
 
         # -------------------------------------------------
-        # Age
+        # גיל
         # -------------------------------------------------
+
         "אילו חוגים מתאימים לגיל 16?",
         "אילו חוגים מתאימים לגיל 16 ביום שלישי?",
         "אילו חוגים מתאימים לגיל 16 ביום שלישי בערב?",
     ]
 
-    for question in test_questions:
+    for index, question in enumerate(
+        test_questions,
+        start=1,
+    ):
+
+        config = {
+            "configurable": {
+                "thread_id":
+                    f"manual-test-{index}"
+            }
+        }
 
         result = graph.invoke(
             {
                 "user_message":
                     question,
-            }
+            },
+            config,
         )
 
         print(
@@ -1135,3 +1405,126 @@ if __name__ == "__main__":
                 "final_answer"
             )
         )
+
+    # -----------------------------------------------------
+    # בדיקות זיכרון שיחה
+    # -----------------------------------------------------
+
+    conversation_tests = [
+        [
+            "מה יש ביום שלישי?",
+            "ומה בערב?",
+        ],
+        [
+            "פילאטיס ביום שלישי בערב",
+            "ומה בבוקר?",
+        ],
+        [
+            "אני רוצה משהו בערב",
+            "פילאטיס",
+        ],
+        [
+            "מה יש ביום שלישי?",
+            "אילו חוגים משה מעביר?",
+        ],
+    ]
+
+    for conversation_index, messages in enumerate(
+        conversation_tests,
+        start=1,
+    ):
+
+        print(
+            "\n"
+            + "=" * 60
+        )
+
+        print(
+            "בדיקת זיכרון:",
+            conversation_index,
+        )
+
+        config = {
+            "configurable": {
+                "thread_id":
+                    f"conversation-test-{conversation_index}"
+            }
+        }
+
+        for message_index, user_message in enumerate(
+            messages,
+            start=1,
+        ):
+
+            result = graph.invoke(
+                {
+                    "user_message":
+                        user_message,
+                },
+                config,
+            )
+
+            print(
+                "\nהודעה:",
+                message_index,
+                user_message,
+            )
+
+            print(
+                "פעולת שיחה:",
+                result.get(
+                    "conversation_action"
+                ),
+            )
+
+            print(
+                "יום:",
+                result.get(
+                    "day"
+                ),
+            )
+
+            print(
+                "סוג חוג:",
+                result.get(
+                    "category"
+                ),
+            )
+
+            print(
+                "התחלה:",
+                result.get(
+                    "start_after"
+                ),
+            )
+
+            print(
+                "סיום:",
+                result.get(
+                    "start_before"
+                ),
+            )
+
+            print(
+                "מדריך:",
+                result.get(
+                    "instructor"
+                ),
+            )
+
+            print(
+                "מחכה להבהרה:",
+                result.get(
+                    "waiting_for_clarification"
+                ),
+            )
+
+            print(
+                "תשובה:"
+            )
+
+            print(
+                result.get(
+                    "final_answer"
+                )
+            )
