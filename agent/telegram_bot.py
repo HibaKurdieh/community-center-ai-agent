@@ -24,7 +24,14 @@ from graph import (
     delete_conversation_thread,
     graph,
 )
-from tools import format_activity_hebrew
+from tools import (
+    format_activity_hebrew,
+    reload_data,
+)
+
+from ingestion.storage_watcher import (
+    run_storage_sync_loop,
+)
 
 
 load_dotenv()
@@ -1537,6 +1544,63 @@ async def error_handler(
 
 
 # ---------------------------------------------------------
+# סנכרון אוטומטי של קובצי המקור
+# ---------------------------------------------------------
+
+
+STORAGE_SYNC_TASK_KEY = (
+    "storage_sync_task"
+)
+
+
+async def _start_storage_sync(
+    application: Application,
+) -> None:
+    """
+    מפעילה את סנכרון קובצי המקור ברקע
+    כאשר אפליקציית הטלגרם מתחילה לפעול
+
+    לאחר הסנכרון נתוני החיפוש נטענים מחדש
+    כדי שהשינויים יהיו זמינים ללא הפעלה מחדש
+    """
+
+    task = asyncio.create_task(
+        run_storage_sync_loop(
+            refresh_data=reload_data
+        )
+    )
+
+    application.bot_data[
+        STORAGE_SYNC_TASK_KEY
+    ] = task
+
+
+async def _stop_storage_sync(
+    application: Application,
+) -> None:
+    """
+    עוצרת בצורה מסודרת את משימת הסנכרון
+    כאשר אפליקציית הטלגרם נסגרת
+    """
+
+    task = application.bot_data.pop(
+        STORAGE_SYNC_TASK_KEY,
+        None,
+    )
+
+    if task is None:
+        return
+
+    task.cancel()
+
+    try:
+        await task
+
+    except asyncio.CancelledError:
+        pass
+
+
+# ---------------------------------------------------------
 # בניית היישום
 # ---------------------------------------------------------
 
@@ -1554,6 +1618,12 @@ def build_application() -> Application:
         .builder()
         .token(
             token
+        )
+        .post_init(
+            _start_storage_sync
+        )
+        .post_shutdown(
+            _stop_storage_sync
         )
         .build()
     )
