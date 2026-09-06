@@ -44,13 +44,8 @@ from ingestion.source_ingestion import (
     ingest_external_source,
     ingest_structured_file,
 )
-
-
-LECTURER_DATA_DIR = (
-    PROJECT_ROOT
-    / "data"
-    / "raw"
-    / "lecturer_samples"
+from ingestion.storage_source import (
+    downloaded_source_files,
 )
 
 
@@ -150,6 +145,7 @@ def _process_docx_file(
         "activities_count": len(
             activities
         ),
+        "source_type": "docx",
     }
 
     return (
@@ -163,27 +159,13 @@ def ingest_all_documents() -> tuple[
     list[dict[str, Any]],
 ]:
     """
-    מאתרת את כל קובצי הוורד בתיקיית המרצה
+    מורידה את כל קובצי המקור ממאגר הקבצים
 
-    לפני שליחת מסמך למודל השפה
-    נבדקת טביעת התוכן שלו מול מסד הנתונים
+    כל קובץ מועבר למסלול העיבוד המתאים לפי סוגו
 
-    מסמך שכבר עובד בעבר אינו נשלח שוב למודל
-    ומסמך חדש עובר פענוח תקנון ובדיקת תקינות
+    קובץ שכבר עובד בעבר מזוהה לפי טביעת התוכן
+    ואינו עובר עיבוד חוזר ללא צורך
     """
-
-    file_paths = sorted(
-        LECTURER_DATA_DIR.glob(
-            "*.docx"
-        )
-    )
-
-    if not file_paths:
-        print(
-            "⚠ No DOCX files found."
-        )
-
-        return [], []
 
     all_activities: list[
         dict[str, Any]
@@ -195,34 +177,87 @@ def ingest_all_documents() -> tuple[
 
     print(
         "\n"
-        "=== AI Document Ingestion Pipeline ==="
+        "=== Storage Ingestion Pipeline ==="
         "\n"
     )
 
-    for file_path in file_paths:
-        (
-            activities,
-            source_record,
-        ) = _process_docx_file(
-            file_path
-        )
+    with downloaded_source_files() as file_paths:
 
-        if not activities:
-            continue
-
-        all_activities.extend(
-            activities
-        )
-
-        if source_record is not None:
-            processed_sources.append(
-                source_record
+        if not file_paths:
+            print(
+                "⚠ No supported source files found."
             )
 
-        print(
-            f"{file_path.name}: "
-            f"{len(activities)} activities"
-        )
+            return [], []
+
+        for file_path in sorted(
+            file_paths
+        ):
+
+            suffix = (
+                file_path.suffix.lower()
+            )
+
+            if suffix == ".docx":
+                (
+                    activities,
+                    source_record,
+                ) = _process_docx_file(
+                    file_path
+                )
+
+            else:
+                file_hash = (
+                    calculate_file_hash(
+                        file_path
+                    )
+                )
+
+                if is_source_processed(
+                    file_hash
+                ):
+                    print(
+                        f"{file_path.name}: "
+                        "already processed, skipping."
+                    )
+
+                    continue
+
+                activities = (
+                    ingest_structured_file(
+                        file_path
+                    )
+                )
+
+                source_record = {
+                    "source_file":
+                        file_path.name,
+                    "file_hash":
+                        file_hash,
+                    "activities_count":
+                        len(
+                            activities
+                        ),
+                    "source_type":
+                        suffix.lstrip("."),
+                }
+
+            if not activities:
+                continue
+
+            all_activities.extend(
+                activities
+            )
+
+            if source_record is not None:
+                processed_sources.append(
+                    source_record
+                )
+
+            print(
+                f"{file_path.name}: "
+                f"{len(activities)} activities"
+            )
 
     return (
         deduplicate_activities(
@@ -230,7 +265,6 @@ def ingest_all_documents() -> tuple[
         ),
         processed_sources,
     )
-
 
 def print_summary(
     activities: list[dict[str, Any]],
@@ -524,6 +558,10 @@ def main() -> None:
             activities_count=source[
                 "activities_count"
             ],
+            source_type=source.get(
+                "source_type",
+                "docx",
+            ),
         )
 
     print(

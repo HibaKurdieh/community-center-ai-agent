@@ -7,6 +7,7 @@
 בנוסף הוא מאפשר לקרוא את הפעילויות הקיימות
 לצורך שימוש בשכבת החיפוש של המערכת
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -19,7 +20,7 @@ from database.supabase_client import (
 TABLE_NAME = "activities"
 
 
-# Fields that exist in the Supabase table.
+# השדות שקיימים בטבלת הפעילויות במסד הנתונים
 ACTIVITY_FIELDS = (
     "source_file",
     "center_name",
@@ -48,7 +49,7 @@ ACTIVITY_FIELDS = (
 )
 
 
-# These fields are NOT NULL in Supabase.
+# השדות שחייבים להכיל ערך לפני שמירת פעילות
 REQUIRED_FIELDS = (
     "source_file",
     "center_name",
@@ -69,6 +70,7 @@ def _has_value(
     """
     בודקת אם קיים ערך שימושי בשדה
     """
+
     if value is None:
         return False
 
@@ -258,6 +260,79 @@ def insert_new_activities(
         "inserted": inserted,
         "duplicates": duplicates,
     }
+
+
+def get_activities_by_source_file(
+    source_file: str,
+) -> list[dict[str, Any]]:
+    """
+    קוראת את כל הפעילויות ששייכות לקובץ מקור מסוים
+
+    התוצאה משמשת לשמירת עותק של הנתונים הקיימים
+    לפני החלפה של קובץ מקור
+    """
+
+    clean_source_file = (
+        source_file.strip()
+    )
+
+    if not clean_source_file:
+        raise ValueError(
+            "שם קובץ המקור אינו יכול להיות ריק"
+        )
+
+    client = get_supabase_client()
+
+    response = (
+        client.table(TABLE_NAME)
+        .select("*")
+        .eq(
+            "source_file",
+            clean_source_file,
+        )
+        .order("id")
+        .execute()
+    )
+
+    return response.data or []
+
+
+def delete_activities_by_source_file(
+    source_file: str,
+) -> int:
+    """
+    מוחקת את כל הפעילויות ששייכות לקובץ מקור מסוים
+
+    הפעולה מתבצעת לפי שם קובץ המקור
+    ומחזירה את מספר הרשומות שנמחקו
+    """
+
+    clean_source_file = (
+        source_file.strip()
+    )
+
+    if not clean_source_file:
+        raise ValueError(
+            "שם קובץ המקור אינו יכול להיות ריק"
+        )
+
+    client = get_supabase_client()
+
+    response = (
+        client.table(TABLE_NAME)
+        .delete()
+        .eq(
+            "source_file",
+            clean_source_file,
+        )
+        .execute()
+    )
+
+    return len(
+        response.data or []
+    )
+
+
 def get_all_activities() -> list[dict[str, Any]]:
     """
     קוראת את כל הפעילויות מטבלת הפעילויות

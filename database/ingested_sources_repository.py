@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from database.supabase_client import (
     get_supabase_client,
 )
@@ -50,6 +52,35 @@ def is_source_processed(
     )
 
 
+def get_processed_sources() -> list[dict[str, Any]]:
+    """
+    קוראת את מקורות הנתונים שכבר עובדו
+
+    לכל מקור מוחזרים שם הקובץ
+    טביעת התוכן והסטטוס שלו
+    """
+
+    client = get_supabase_client()
+
+    response = (
+        client.table(TABLE_NAME)
+        .select(
+            "source_file,"
+            "file_hash,"
+            "source_type,"
+            "activities_count,"
+            "status"
+        )
+        .eq(
+            "status",
+            "processed",
+        )
+        .execute()
+    )
+
+    return response.data or []
+
+
 def register_processed_source(
     *,
     source_file: str,
@@ -83,4 +114,40 @@ def register_processed_source(
             on_conflict="file_hash",
         )
         .execute()
+    )
+
+
+def delete_processed_source_by_name(
+    source_file: str,
+) -> int:
+    """
+    מוחקת את רישומי העיבוד ששייכים לקובץ מקור מסוים
+
+    הפעולה מתבצעת לפי שם קובץ המקור
+    ומחזירה את מספר הרשומות שנמחקו
+    """
+
+    clean_source_file = (
+        source_file.strip()
+    )
+
+    if not clean_source_file:
+        raise ValueError(
+            "שם קובץ המקור אינו יכול להיות ריק"
+        )
+
+    client = get_supabase_client()
+
+    response = (
+        client.table(TABLE_NAME)
+        .delete()
+        .eq(
+            "source_file",
+            clean_source_file,
+        )
+        .execute()
+    )
+
+    return len(
+        response.data or []
     )
