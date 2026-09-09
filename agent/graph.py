@@ -12,19 +12,22 @@ from langgraph.graph import END, START, StateGraph
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from conversation import (
+from agent.conversation import (
     build_query_from_state,
     classify_conversation_message,
     has_meaningful_search_filters,
     merge_follow_up,
     should_check_conversation_context,
 )
-from request_parser import (
+
+from agent.request_parser import (
     parse_user_request,
     reinterpret_unclear_request,
 )
-from state import AgentState
-from tools import (
+
+from agent.state import AgentState
+
+from agent.tools import (
     format_activity_hebrew,
     search_activities,
 )

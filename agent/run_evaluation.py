@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from graph import graph
+from agent.graph import graph
 
 
 BASE_DIR = Path(__file__).resolve().parent

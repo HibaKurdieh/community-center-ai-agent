@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from request_parser import (
+from agent.request_parser import (
     parse_user_request,
     reinterpret_unclear_request,
 )

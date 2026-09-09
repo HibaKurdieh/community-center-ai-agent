@@ -20,11 +20,11 @@ from telegram.ext import (
     filters,
 )
 
-from graph import (
+from agent.graph import (
     delete_conversation_thread,
     graph,
 )
-from tools import (
+from agent.tools import (
     format_activity_hebrew,
     reload_data,
 )

@@ -1755,8 +1755,6 @@ def save_external_source_preview(
                 "index"
             )
         )
-
-
 @app.post(
     "/external-sources/<int:source_id>/delete"
 )
@@ -1765,28 +1763,54 @@ def remove_external_source(
     source_id: int,
 ) -> Any:
     """
-    מוחקת מקור חיצוני מרשימת הניהול
+    מוחקת מקור חיצוני ואת הפעילויות שנשמרו ממנו
 
-    מחיקת נתונים שכבר נקלטו מהמקור
-    תחובר בשלב הסנכרון של המקורות החיצוניים
+    תחילה נמחקות הפעילויות השייכות למקור
+    ולאחר מכן נמחק המקור עצמו מרשימת הניהול
     """
 
     _validate_csrf_token()
 
     try:
-        deleted = (
+        source = (
+            get_external_source_by_id(
+                source_id
+            )
+        )
+
+        if source is None:
+            raise ValueError(
+                "המקור החיצוני לא נמצא"
+            )
+
+        source_file = (
+            _external_source_file_name(
+                source
+            )
+        )
+
+        deleted_activities = (
+            delete_activities_by_source_file(
+                source_file
+            )
+        )
+
+        deleted_source = (
             delete_external_source(
                 source_id
             )
         )
 
-        if not deleted:
+        if not deleted_source:
             raise ValueError(
-                "המקור החיצוני לא נמצא"
+                "המקור החיצוני לא נמחק"
             )
 
         flash(
-            "המקור החיצוני נמחק בהצלחה",
+            (
+                "המקור החיצוני נמחק בהצלחה. "
+                f"נמחקו גם {deleted_activities} פעילויות ששויכו אליו"
+            ),
             "success",
         )
 
@@ -1801,8 +1825,6 @@ def remove_external_source(
             "index"
         )
     )
-
-
 if __name__ == "__main__":
     app.run(
         host="127.0.0.1",

@@ -4,7 +4,7 @@
 
 המערכת מאפשרת למשתמש לשאול שאלות חופשיות דרך Telegram, להבין את כוונת החיפוש, לשמור הקשר בין הודעות, לסנן פעילויות לפי מספר פרמטרים ולהחזיר תשובות ברורות מתוך מאגר הפעילויות של המערכת.
 
-הפרויקט משלב בין **LLM להבנת שפה טבעית** לבין **לוגיקה דטרמיניסטית לאימות, סינון ושליפת מידע**, כאשר LangGraph מנהל את זרימת העבודה של הסוכן.
+הפרויקט משלב בין **LLM להבנת שפה טבעית** לבין **לוגיקה דטרמיניסטית לאימות, סינון ושליפת מידע**, כאשר LangGraph מנהל את זרימת העבודה ואת מצב השיחה של הסוכן.
 
 ---
 
@@ -12,39 +12,32 @@
 
 המערכת כוללת כיום:
 
-- **85 פעילויות**
-- **6 מרכזים**
 - ממשק Telegram
 - חיפוש בשפה טבעית בעברית
 - הבנת ניסוחים חופשיים ושגיאות כתיב סבירות
 - שיחות המשך ושמירת הקשר
+- זיכרון שיחה מתמשך באמצעות LangGraph ו-PostgreSQL
 - סינון לפי יום, שעה, סוג פעילות, מרכז, מדריך, קהל יעד, גיל ועוד
 - Clarification כאשר הבקשה אינה ברורה מספיק
 - Fallback interpretation
 - Pagination להצגת תוצאות נוספות
 - Data Ingestion Pipeline
 - תמיכה ב-DOCX וב-Excel
+- Supabase Storage לניהול קובצי מקור
+- סנכרון Add / Replace / Delete של קובצי מקור
+- סנכרון אוטומטי של מקורות הנתונים
+- ממשק Admin מקומי לניהול מקורות
+- תמיכה במקור חיצוני מסוג Publuu
+- Preview ו-Validation לפני שמירת נתוני מקור חיצוני
 - תשתית למקור API חיצוני מובנה
 - Automated Evaluation
 - Data Validation
 
 ### Current Quality Results
 
-```text
-Automated Evaluation
---------------------
-PASS: 30
-FAIL: 0
-TOTAL: 30
-SCORE: 100%
+הפרויקט כולל כלי Automated Evaluation ו-Data Validation שניתן להריץ מחדש בכל שלב.
 
-Data Validation
----------------
-Activities: 85
-Critical Errors: 0
-Duplicate Groups: 0
-Status: PASS
-```
+מספר הפעילויות במערכת הוא דינמי, משום שמקורות נתונים יכולים להתווסף, להתחלף או להימחק דרך מנגנון הניהול והסנכרון.
 
 ---
 
@@ -62,6 +55,8 @@ Telegram Bot
 Conversation Layer
   ↓
 LangGraph Agent
+  ↓
+Persistent Conversation State
   ↓
 Understand Request
   ↓
@@ -156,7 +151,7 @@ User:
 
 2. Conversation Layer checks the conversation context
 
-3. LangGraph starts the agent workflow
+3. LangGraph loads the persistent conversation state
 
 4. Request Parser understands the request
 
@@ -168,7 +163,7 @@ User:
 
 8. Search Tools apply the filters
 
-9. Matching activities are returned
+9. Matching activities are returned from Supabase
 
 10. The answer is formatted and sent back through Telegram
 ```
@@ -199,6 +194,9 @@ User:
 - הודעות עזרה
 - Greetings ו-Thanks
 - הצגת מצב Typing בזמן עיבוד הבקשה
+הקוד אינו נמצא בתוך Telegram.
+
+ה-Bot רץ כתהליך Python, והספרייה `python-telegram-bot` מתקשרת עם Telegram Bot API ומעבירה את ההודעות ללוגיקת המערכת.
 
 ### Example Queries
 
@@ -220,11 +218,11 @@ User:
 
 ## 2. Conversation Layer
 
-`agent/telegram_bot.py`
+`agent/conversation.py`
 
-שכבת השיחה אחראית להבנת הקשר השיחה ולשמירת המידע בין הודעות המשתמש באמצעות `context.user_data` של Telegram.
+שכבת השיחה אחראית להבנת הקשר השיחה ולקביעה כיצד הודעה חדשה קשורה למידע שכבר נשמר ב-State.
 
-השכבה משתמשת במודל GPT-4o-mini עם פלט מובנה מסוג `ConversationDecision` כדי להחליט כיצד ההודעה החדשה קשורה לשיחה הקודמת.
+השכבה עובדת יחד עם `agent/graph.py`, `agent/request_parser.py` ו-`agent/state.py`.
 
 לדוגמה:
 
@@ -251,9 +249,11 @@ User:
 - Unclear Messages
 - Pagination
 
-הזיכרון של השיחה נשמר ב-`context.user_data` וכולל בין היתר את מצב החיפוש האחרון, מצב ההבהרה ומידע הדרוש להצגת תוצאות נוספות.
+הזיכרון המרכזי של השיחה אינו נשמר רק בתוך Telegram.
 
-כך ניתן לנהל שיחה טבעית ולא רק סדרה של שאלות מבודדות.
+ה-State נשמר באמצעות LangGraph Checkpointer מסוג `PostgresSaver`, המחובר ל-PostgreSQL דרך `DATABASE_URL`.
+
+כך ניתן לשמור את מצב השיחה בין הודעות וגם לאחר הפעלה מחדש של ה-Bot.
 
 ---
 
@@ -270,26 +270,35 @@ LangGraph מנהל את ה-Workflow המרכזי של הסוכן.
 ```text
 START
   ↓
-Understand Request
+prepare_conversation_request
   ↓
-Is the request clear?
-  │
-  ├── YES
-  │     ↓
-  │ Activity Search
-  │
-  └── NO
-        ↓
-     Fallback
-        ↓
-   Is it clear now?
-      │
-      ├── YES → Activity Search
-      │
-      └── NO  → Clarification
+understand_request
+  ↓
+route_after_understanding
+  ├── activity_node
+  ├── fallback_node
+  └── clarification_node
+
+fallback_node
+  ↓
+route_after_fallback
+  ├── activity_node
+  └── clarification_node
+
+activity_node
+  ↓
+END
+
+clarification_node
+  ↓
+END
 ```
 
 LangGraph אחראי להחליט מה הצעד הבא בהתאם ל-State הנוכחי של הסוכן.
+
+הגרף נקמפל עם `PostgresSaver`, ולכן מצב השיחה נשמר בצורה מתמשכת לפי `thread_id`.
+
+המערכת כוללת גם אפשרות למחיקת thread שמור לצורך Reset אמיתי של השיחה.
 
 ---
 
@@ -390,9 +399,15 @@ AgentState מגדיר את מבנה המידע שעובר בין ה-Nodes של L
 - Age
 - Search results
 - Clarification state
+- Conversation action
+- Query fragment
+- Clear fields
+- Pagination state
 - Final answer
 
 כך כל Node מקבל את המידע שכבר נאסף ויכול להמשיך ממנו.
+
+ה-State נשמר לאורך השיחה באמצעות הזיכרון המתמשך של LangGraph.
 
 ---
 
@@ -446,22 +461,13 @@ start_after = 17:00
 ```text
 DOCX
   ↓
-DOCX Reader
+AI DOCX Parser
   ↓
-Universal DOCX Parser
+Generic LLM Parser
   ↓
-6 Deterministic Parsers
+Deterministic Validation
   ↓
-Normalization & Time Inference
-  ↓
-Validation & Quality Evaluation
-  ↓
-Result Selection
-  ├── Direct Selection
-  ├── LLM Verifier
-  └── Generic LLM Parser
-  ↓
-Final Validation
+Activities
 
 
 Excel
@@ -486,9 +492,20 @@ Source Ingestion
 Validation & Deduplication
 
 
-All Sources
+Publuu External Source
   ↓
-Ingestion Controller
+Publuu Reader
+  ↓
+AI Activity Extraction
+  ↓
+Preview
+  ↓
+Validation
+  ↓
+Activities
+
+
+All Sources
   ↓
 Activities Repository
   ↓
@@ -496,6 +513,8 @@ Supabase
 ```
 
 ה-Agent אינו קורא מחדש את קובצי המקור בזמן חיפוש.
+
+ה-Agent גם אינו קורא את Publuu בזמן שאלת משתמש.
 
 לאחר שלב ה-Ingestion הפעילויות נשמרות במבנה אחיד ב-Supabase, וה-Agent עובד מול הנתונים שכבר נשמרו.
 
@@ -505,46 +524,45 @@ Supabase
 
 `ingestion/readers/docx_reader.py`
 
-אחראי לקריאת תוכן מקבצי DOCX ולהפיכתו למבנה שניתן להעביר ל-Parsers.
+אחראי לקריאת תוכן מקבצי DOCX ולהפיכתו למבנה שניתן לעיבוד.
 
 ---
 
-## Schedule Parsers
+## AI DOCX Parser
 
-המערכת כוללת שישה Parsers דטרמיניסטיים כדי להתמודד עם מבנים שונים של מסמכי לוחות זמנים.
+`ingestion/ai_docx_parser.py`
 
-כולם נמצאים באותו קובץ:
+מסמכי DOCX עוברים כיום במסלול AI-first.
 
-```text
-ingestion/parsers/schedule_parsers.py
-```
-
-ה-Parsers הם:
+הקובץ מפעיל את:
 
 ```text
-parse_basic_schedule
-parse_table_schedule
-parse_dirty_schedule
-parse_bilingual_schedule
-parse_grouped_schedule
-parse_edge_case_schedule
+ingestion/generic_llm_parser.py
 ```
 
-כל Parser מטפל בצורה שונה שבה מידע יכול להופיע במסמך.
+לצורך חילוץ סמנטי של הפעילויות.
 
-ה-Parsers אינם נבחרים לפי שם הקובץ.
+לאחר החילוץ התוצאה עוברת:
 
-`ingestion/universal_docx_parser.py` מנהל את תהליך הפענוח, מפעיל את ה-Parsers, משווה בין התוצאות לפי איכות ותקינות ובוחר את התוצאה המתאימה ביותר.
+```text
+ingestion/validation.py
+```
 
-אם קיימת תוצאה חזקה וברורה, המערכת יכולה לבחור בה ישירות.
+ורק תוצאה תקינה ממשיכה בתהליך הקליטה.
 
-אם מספר תוצאות חזקות קרובות זו לזו, `ingestion/llm_verifier.py` משמש להשוואה בין תוצאות ה-Parsers הקיימות.
+```text
+DOCX
+  ↓
+ai_docx_parser.py
+  ↓
+generic_llm_parser.py
+  ↓
+Validation
+  ↓
+Valid Activities
+```
 
-ה-Verifier אינו יוצר פעילויות חדשות אלא בוחר בין תוצאות קיימות.
-
-אם אף Parser מוכר אינו מחזיר תוצאה אמינה, `ingestion/generic_llm_parser.py` משמש כ-Fallback מבוסס GPT-4o-mini ויוצר חילוץ כללי יותר של הנתונים.
-
-לפני שהתוצאה נחשבת מוכנה לשמירה היא עוברת Final Validation.
+המסלול הנוכחי החליף את המבנה הישן של שישה Parsers דטרמיניסטיים נפרדים.
 
 ---
 
@@ -575,7 +593,7 @@ results
 items
 ```
 
-בשלב הנוכחי מדובר בתשתית כללית למקור חיצוני ולא בחיבור פעיל לשירות Calaméo מסוים.
+בשלב הנוכחי מדובר בתשתית כללית למקור חיצוני ולא בחיבור פעיל לשירות מסוים.
 
 ---
 
@@ -629,7 +647,8 @@ items
 
 הוא יכול:
 
-- לעבד את כל קובצי ה-DOCX בתיקיית המקור
+- לעבד את קובצי המקור מתוך Supabase Storage
+
 - לקבל קובץ DOCX יחיד
 - לקבל קובץ Excel
 - לקבל כתובת של מקור API חיצוני מובנה
@@ -639,6 +658,140 @@ items
 ברירת המחדל היא Dry Run.
 
 בעת שימוש ב-`--save`, פעילויות חדשות נשמרות ישירות ב-Supabase דרך `database/activities_repository.py` תוך מניעת כפילויות.
+---
+
+# Source Storage and Synchronization
+
+`ingestion/storage_source.py`
+
+אחראי לקריאת קובצי המקור מתוך Supabase Storage.
+
+הקובץ:
+
+- קורא את שם ה-Bucket מתוך `SOURCE_BUCKET`
+- מאתר קובצי מקור נתמכים
+- מוריד אותם זמנית לצורך עיבוד
+
+סוגי הקבצים הנתמכים:
+
+```text
+.docx
+.xlsx
+.xlsm
+```
+
+`ingestion/storage_sync.py`
+
+אחראי לזהות שינויים בקובצי המקור.
+
+הוא משווה בין הקבצים שנמצאים ב-Storage לבין המקורות שכבר עובדו ומזהה:
+
+```text
+added
+replaced
+deleted
+unchanged
+```
+
+קובץ חדש מתווסף למערכת.
+
+קובץ שהוחלף מעובד מחדש ומחליף את הרשומות הקודמות שלו.
+
+קובץ שנמחק גורם למחיקת הפעילויות ששויכו אליו.
+
+במקרה של כשל במהלך Replace, הקוד מנסה לשחזר את הנתונים הקודמים.
+
+`ingestion/storage_watcher.py`
+
+מפעיל את אותו תהליך סנכרון באופן מחזורי ברקע.
+
+ברירת המחדל היא בדיקה כל 60 שניות.
+
+---
+
+# Admin Interface
+
+`admin/app.py`
+
+המערכת כוללת ממשק ניהול מקומי מבוסס Flask.
+
+הממשק מאפשר למנהל:
+
+- Login
+
+- לראות את קובצי המקור
+
+- Upload
+
+- Download
+
+- Replace
+
+- Delete
+
+- לנהל מקורות חיצוניים
+
+- לבדוק מקור חיצוני
+
+- לראות Preview לפני שמירה
+
+- לערוך נתונים שחולצו לפני Save
+
+הקבצים של הממשק הם:
+
+```text
+admin/app.py
+admin/templates/login.html
+admin/templates/index.html
+admin/templates/external_preview.html
+```
+
+הממשק פועל בנפרד מממשק התושב ב-Telegram.
+
+כך לוגיקת ניהול הנתונים אינה מעורבת בלוגיקת החיפוש של המשתמש.
+
+---
+
+# Publuu External Source
+
+המערכת כוללת גם מסלול לקריאת מקור ציבורי חיצוני מסוג Publuu.
+
+הקבצים המרכזיים הם:
+
+```text
+ingestion/readers/publuu_reader.py
+ingestion/readers/publuu_activity_extractor.py
+database/external_sources_repository.py
+admin/templates/external_preview.html
+```
+
+הזרימה היא:
+
+```text
+Publuu URL
+  ↓
+Publuu Reader
+  ↓
+Publication Content
+  ↓
+AI Activity Extraction
+  ↓
+Preview
+  ↓
+Admin Review
+  ↓
+Validation
+  ↓
+Activities Repository
+  ↓
+Supabase
+```
+
+המטרה של המסלול היא להוכיח שהמערכת יכולה לקרוא מידע גם ממקור חיצוני שאינו קובץ מקומי.
+
+ה-Publuu אינו מקור שה-Agent קורא בזמן חיפוש.
+
+לאחר שמירת הפעילויות, הן הופכות לחלק מטבלת `activities` ונשלפות בדיוק כמו יתר הפעילויות.
 
 ---
 
@@ -646,109 +799,260 @@ items
 
 ```text
 community-center-ai-agent/
+
 │
-├── agent/
-│   ├── evaluation_cases.json
-│   │   └── Automated evaluation scenarios
-│   │
-│   ├── graph.py
-│   │   └── LangGraph workflow and routing
-│   │
-│   ├── request_parser.py
-│   │   └── Natural-language understanding and parsing
-│   │
-│   ├── run_evaluation.py
-│   │   └── Evaluation runner
-│   │
-│   ├── state.py
-│   │   └── LangGraph state definition
-│   │
-│   ├── telegram_bot.py
-│   │   └── Telegram interface, conversation context and follow-up handling
-│   │
-│   ├── tools.py
-│   │   └── Search, filtering and result formatting
-│   │
-│   └── validate_data.py
-│       └── Data-validation checks
-│
-├── data/
-│   └── raw/
-│       ├── lecturer_samples/
-│       │   ├── 01_מרכז_ספורט_הדס_בסיסי.docx
-│       │   ├── 02_מרכז_ספורט_אלונים_טבלה.docx
-│       │   ├── 03_מרכז_כושר_נופים_מלוכלך.docx
-│       │   ├── 04_Neve_Sport_Center_bilingual.docx
-│       │   ├── 05_מרכז_ספורט_מעיין_לפי_חוג.docx
-│       │   └── 06_מרכז_ספורט_גלים_מקרי_קצה.docx
-│       │
-│       └── synthetic/
-│           ├── community_center_booklet.docx
-│           └── community_center_data.xlsx
-│
-├── database/
+
+├── admin/
+
 │   ├── __init__.py
-│   │
+
+│   ├── app.py
+
+│   └── templates/
+
+│       ├── external_preview.html
+
+│       ├── index.html
+
+│       └── login.html
+
+│
+
+├── agent/
+
+│   ├── conversation.py
+
+│   │   └── Conversation context and follow-up logic
+
+│
+
+│   ├── evaluation_cases.json
+
+│   │   └── Automated evaluation scenarios
+
+│
+
+│   ├── graph.py
+
+│   │   └── LangGraph workflow, routing and persistent memory
+
+│
+
+│   ├── request_parser.py
+
+│   │   └── Natural-language understanding and parsing
+
+│
+
+│   ├── run_evaluation.py
+
+│   │   └── Evaluation runner
+
+│
+
+│   ├── state.py
+
+│   │   └── LangGraph state definition
+
+│
+
+│   ├── telegram_bot.py
+
+│   │   └── Telegram interface
+
+│
+
+│   ├── tools.py
+
+│   │   └── Search, filtering and result formatting
+
+│
+
+│   └── validate_data.py
+
+│       └── Data-validation checks
+
+│
+
+├── data/
+
+│   └── raw/
+
+│       ├── lecturer_samples/
+
+│       │   ├── 01_מרכז_ספורט_הדס_בסיסי.docx
+
+│       │   ├── 02_מרכז_ספורט_אלונים_טבלה.docx
+
+│       │   ├── 03_מרכז_כושר_נופים_מלוכלך.docx
+
+│       │   ├── 04_Neve_Sport_Center_bilingual.docx
+
+│       │   ├── 05_מרכז_ספורט_מעיין_לפי_חוג.docx
+
+│       │   └── 06_מרכז_ספורט_גלים_מקרי_קצה.docx
+
+│       │
+
+│       └── synthetic/
+
+│           ├── community_center_booklet.docx
+
+│           └── community_center_data.xlsx
+
+│
+
+├── database/
+
+│   ├── __init__.py
+
+│
+
 │   ├── activities_repository.py
-│   │   └── Activity reads, inserts and duplicate prevention
-│   │
+
+│   │   └── Activity reads, inserts and deletion
+
+│
+
+│   ├── external_sources_repository.py
+
+│   │   └── External-source management
+
+│
+
+│   ├── ingested_sources_repository.py
+
+│   │   └── Processed-source tracking
+
+│
+
 │   ├── schema.sql
-│   │   └── Supabase activities table schema
-│   │
+
+│   │   └── Supabase table schemas
+
+│
+
 │   └── supabase_client.py
+
 │       └── Supabase connection
+
 │
+
 ├── docs/
+
 │   ├── architecture.png
+
 │   ├── langgraph_flow.png
+
 │   └── system_map.png
+
 │
+
 ├── ingestion/
-│   ├── generic_llm_parser.py
-│   │   └── Generic extraction for unknown DOCX structures
-│   │
-│   ├── ingest_documents.py
-│   │   └── Main ingestion controller
-│   │
-│   ├── llm_verifier.py
-│   │   └── LLM verification between close parser candidates
-│   │
-│   ├── normalize.py
-│   │   └── Data normalization
-│   │
-│   ├── source_adapter.py
-│   │   └── Unified activity mapping for structured sources
-│   │
-│   ├── source_ingestion.py
-│   │   └── Structured-source ingestion and deduplication
-│   │
-│   ├── test_universal_docx_parser.py
-│   │   └── Universal parser regression tests
-│   │
-│   ├── time_inference.py
-│   │   └── Time normalization and inference
-│   │
-│   ├── universal_docx_parser.py
-│   │   └── Automatic parser selection and LLM fallback routing
-│   │
-│   ├── validation.py
-│   │   └── Activity validation
-│   │
-│   ├── parsers/
-│   │   └── schedule_parsers.py
-│   │
-│   └── readers/
-│       ├── docx_reader.py
-│       ├── excel_reader.py
-│       └── external_api_reader.py
+
+│   ├── ai_docx_parser.py
+
+│   │   └── AI-first DOCX parsing
+
 │
+
+│   ├── file_hash.py
+
+│   │   └── Source content hashing
+
+│
+
+│   ├── generic_llm_parser.py
+
+│   │   └── Semantic DOCX extraction
+
+│
+
+│   ├── ingest_documents.py
+
+│   │   └── Main ingestion controller
+
+│
+
+│   ├── normalize.py
+
+│   │   └── Data normalization
+
+│
+
+│   ├── source_adapter.py
+
+│   │   └── Unified activity mapping for structured sources
+
+│
+
+│   ├── source_ingestion.py
+
+│   │   └── Structured-source ingestion and deduplication
+
+│
+
+│   ├── storage_source.py
+
+│   │   └── Supabase Storage source access
+
+│
+
+│   ├── storage_sync.py
+
+│   │   └── Add, replace and delete synchronization
+
+│
+
+│   ├── storage_watcher.py
+
+│   │   └── Automatic storage synchronization
+
+│
+
+│   ├── test_ai_docx_parser.py
+
+│   │   └── AI DOCX parser test
+
+│
+
+│   ├── time_inference.py
+
+│   │   └── Time normalization and inference
+
+│
+
+│   ├── validation.py
+
+│   │   └── Activity validation
+
+│
+
+│   └── readers/
+
+│       ├── docx_reader.py
+
+│       ├── excel_reader.py
+
+│       ├── external_api_reader.py
+
+│       ├── publuu_activity_extractor.py
+
+│       └── publuu_reader.py
+
+│
+
 ├── .env.example
+
 ├── .gitignore
+
 ├── README.md
+
 └── requirements.txt
 ```
 
 > Generated folders such as `__pycache__` are intentionally omitted from the structure above.
+
 >
 > The local `.env` file is also intentionally omitted because it contains sensitive environment variables and is not committed to Git.
 
@@ -761,16 +1065,21 @@ community-center-ai-agent/
 | Technology | Purpose |
 |---|---|
 | Python | Core application logic |
-| OpenAI GPT-4o-mini | Natural-language understanding |
+| OpenAI GPT-4o-mini | Natural-language understanding and extraction |
 | LangChain OpenAI | OpenAI model integration |
 | LangGraph | Agent workflow orchestration |
+| LangGraph Postgres Checkpointer | Persistent conversation memory |
+| PostgreSQL / psycopg | LangGraph checkpoint storage |
 | Pydantic | Structured output and validation |
 | python-telegram-bot | Telegram interface |
+| Flask | Local Admin interface |
 | python-dotenv | Environment-variable management |
 | pandas | Data processing |
 | openpyxl | Excel processing |
 | python-docx | DOCX processing |
+| PyMuPDF | PDF and publication-page processing |
 | Supabase / PostgreSQL | Active activity database and structured storage |
+| Supabase Storage | Source-file storage |
 
 ---
 
@@ -816,11 +1125,21 @@ TELEGRAM_BOT_TOKEN=
 SUPABASE_URL=
 SUPABASE_SECRET_KEY=
 EXTERNAL_API_KEY=
+DATABASE_URL=
+SOURCE_BUCKET=
+ADMIN_PASSWORD=
+ADMIN_SESSION_SECRET=
 ```
 
 לאחר מכן יש להזין את הערכים המתאימים בקובץ `.env` המקומי.
 
 `EXTERNAL_API_KEY` נדרש רק כאשר המקור החיצוני שבו משתמשים דורש מפתח גישה.
+
+`DATABASE_URL` משמש את LangGraph לצורך Persistent Checkpoints.
+
+`SOURCE_BUCKET` מגדיר את מאגר קובצי המקור ב-Supabase Storage.
+
+`ADMIN_PASSWORD` ו-`ADMIN_SESSION_SECRET` משמשים לממשק הניהול המקומי.
 
 > `.env` אינו מועלה ל-Git.
 
@@ -833,16 +1152,48 @@ EXTERNAL_API_KEY=
 מתיקיית השורש של הפרויקט:
 
 ```bash
-python agent/telegram_bot.py
+python -m agent.telegram_bot
 ```
 
 לאחר ההפעלה ניתן לפתוח את ה-Bot ב-Telegram ולשלוח שאלות בעברית.
 
 ---
 
+## Admin Interface
+
+להפעלת ממשק הניהול:
+
+```bash
+python -m admin.app
+```
+
+לאחר מכן ניתן לפתוח:
+
+```text
+http://127.0.0.1:5000
+```
+
+---
+
+## Storage Synchronization
+
+לבדיקת שינויים בלבד:
+
+```bash
+python -m ingestion.storage_sync
+```
+
+לביצוע Add / Replace / Delete בפועל:
+
+```bash
+python -m ingestion.storage_sync --apply
+```
+
+---
+
 ## Data Ingestion
 
-כדי להריץ את תהליך ה-Ingestion במצב Dry Run על קובצי ה-DOCX שבתיקיית המקור:
+כדי להריץ את תהליך ה-Ingestion במצב Dry Run על קובצי המקור שב-Supabase Storage:
 
 ```bash
 python -m ingestion.ingest_documents
@@ -902,16 +1253,17 @@ python -m ingestion.ingest_documents --file "path/to/file.xlsx" --save
 
 ```text
 agent/evaluation_cases.json
+
 agent/run_evaluation.py
 ```
 
 להרצה:
 
 ```bash
-python agent/run_evaluation.py
+python -m agent.run_evaluation
 ```
 
-ה-Evaluation כולל 30 תרחישים הבודקים בין היתר:
+ה-Evaluation בודק בין היתר:
 
 - Categories
 - Days
@@ -924,21 +1276,11 @@ python agent/run_evaluation.py
 - Spelling mistakes
 - Vague requests
 - Clarification behavior
+- Conversation behavior
 
 ### Current Result
 
-```text
-PASS: 30
-FAIL: 0
-TOTAL: 30
-SCORE: 100.0%
-```
-
-דוח מפורט נוצר ב:
-
-```text
-agent/evaluation_report.json
-```
+יש להריץ את ה-Evaluation מחדש כדי לקבל תוצאה עדכנית עבור הגרסה הנוכחית של המערכת.
 
 ---
 
@@ -949,7 +1291,7 @@ agent/evaluation_report.json
 להרצה:
 
 ```bash
-python agent/validate_data.py
+python -m agent.validate_data
 ```
 
 הבדיקה כוללת:
@@ -964,21 +1306,9 @@ python agent/validate_data.py
 
 ### Current Result
 
-```text
-Activities Loaded: 85
-Critical Errors: 0
-Warnings: 6
-Duplicate Groups: 0
-Status: PASS
-```
+יש להריץ את Data Validation מחדש כדי לקבל תוצאה עדכנית בהתאם למקורות הפעילים ב-Supabase.
 
-ה-Warnings הם מידע לא קריטי ואינם נחשבים לכשל של ה-Dataset.
-
-דוח מפורט נוצר ב:
-
-```text
-agent/data_validation_report.json
-```
+ה-Warnings הם מידע לא קריטי ואינם נחשבים בהכרח לכשל של ה-Dataset.
 
 ---
 
@@ -1098,6 +1428,10 @@ UNKNOWN
 
 ניתן להמשיך חיפוש קיים ולשנות רק חלק מהפילטרים.
 
+## Persistent Memory
+
+מצב השיחה נשמר באמצעות LangGraph ו-PostgreSQL ואינו תלוי רק בזיכרון הזמני של תהליך Telegram.
+
 ## Deterministic Retrieval
 
 לאחר הבנת הבקשה, החיפוש עצמו מתבצע באמצעות לוגיקה דטרמיניסטית.
@@ -1114,8 +1448,11 @@ Language Understanding
 Search
 Data
 Ingestion
+Administration
 Evaluation
 ```
+
+הפרדה זו מאפשרת לחבר בעתיד ממשק אחר, כגון WhatsApp או Web, בלי לשנות את לוגיקת החיפוש המרכזית.
 
 ## Extensibility
 
@@ -1138,12 +1475,14 @@ Evaluation
 בשלב הנוכחי:
 
 - חלק מהשדות אינם מלאים בכל הרשומות
-- מידע על גיל קיים רק בחלק קטן מהפעילויות
+- מידע על גיל אינו קיים בכל הפעילויות
 - התוצאות תלויות במידע שקיים במאגר
 - זמני התגובה תלויים גם בקריאות למודל השפה
 - המערכת פועלת כיום בתחום החיפוש של פעילויות
 - החיבור למקור API חיצוני הוא תשתית כללית ותלוי במבנה ובאימות של השירות החיצוני
-- אין בשלב זה חיבור פעיל ל-Calaméo API
+- ממשק ה-Admin פועל כיום באופן מקומי
+- מסלול Publuu הוא מסלול הדגמה לקריאת מקור ציבורי חיצוני ולא מקור הנתונים הראשי
+- חילוץ ממקורות מבוססי תמונה דורש Review ו-Validation לפני שמירה
 
 המערכת מטפלת במידע חסר בצורה מפורשת ואינה ממציאה ערכים שאינם ידועים.
 
@@ -1163,6 +1502,7 @@ Evaluation
 - הרחבת Data Validation
 - תמיכה בשפות נוספות
 - חיבור לספקי מידע חיצוניים נוספים
+- חיבור ערוצי תקשורת נוספים
 - Deployment לסביבת Production
 
 ---
@@ -1176,31 +1516,30 @@ The system combines:
 - OpenAI GPT-4o-mini for natural-language understanding
 - Deterministic Python validation and normalization
 - LangGraph for workflow orchestration
+- LangGraph Postgres Checkpointer for persistent conversation memory
 - Structured search tools for activity retrieval
 - Supabase / PostgreSQL as the active activity database
+- Supabase Storage for source-file management
 - Telegram for conversational interaction
 
-The agent supports follow-up questions, context preservation, clarification, spelling variations, multiple search filters and pagination.
+- Flask for the local Admin interface
+
+The agent supports follow-up questions, persistent context preservation, clarification, spelling variations, multiple search filters and pagination.
 
 The project contains a multi-source ingestion architecture supporting DOCX documents and Excel files, together with a generic foundation for structured external APIs.
 
-DOCX documents use six deterministic parsers managed by a universal parser, with an LLM verifier when strong candidates are close and a generic LLM fallback when no known parser is reliable.
+DOCX documents currently use an AI-first semantic extraction path through `ai_docx_parser.py` and `generic_llm_parser.py`, followed by deterministic validation.
 
 Excel and structured external API records are adapted to the same Activity schema before validation, deduplication and storage in Supabase.
 
-The external API integration is currently provider-independent infrastructure and is not an active Calaméo API connection.
+Source files can be managed through Supabase Storage, with Add / Replace / Delete synchronization and an automatic background watcher.
+
+The project also includes a local Admin interface for managing source files and external sources.
+
+A Publuu-based external-source flow demonstrates the ability to read information from a public external source, extract activities from publication pages, review them in a Preview screen and validate them before storing them in Supabase.
+
+The resident-facing Agent does not read Publuu or source files at query time. It searches only the structured activity data already stored in Supabase.
 
 The project also includes automated agent evaluation and data-validation tools.
 
-Current quality results:
-
-```text
-Agent Evaluation: 30 / 30 PASS
-Evaluation Score: 100%
-Activities Validated: 85
-Critical Data Errors: 0
-Duplicate Groups: 0
-Data Validation: PASS
-```
-
-The architecture is modular and designed so that additional data sources, tools and AI capabilities can be integrated in future versions without redesigning the entire system.
+The architecture is modular and designed so that additional data sources, communication channels, tools and AI capabilities can be integrated in future versions without redesigning the entire system.

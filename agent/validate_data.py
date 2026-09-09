@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from tools import activities
+from agent.tools import activities
 
 
 BASE_DIR = Path(__file__).resolve().parent
