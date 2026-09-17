@@ -944,7 +944,9 @@ community-center-ai-agent/
 
 │   ├── langgraph_flow.png
 
-│   └── system_map.png
+│   ├── user_question_processing_architecture.png
+
+│   └── data_ingestion_architecture.png
 
 │
 
