@@ -26,7 +26,8 @@
 - Supabase Storage לניהול קובצי מקור
 - סנכרון Add / Replace / Delete של קובצי מקור
 - סנכרון אוטומטי של מקורות הנתונים
-- ממשק Admin מקומי לניהול מקורות
+- ממשק Admin מבוסס Web לניהול מקורות, זמין דרך HTTPS
+- Deployment על Azure Linux VM עם systemd, Nginx ו-HTTPS
 - תמיכה במקור חיצוני מסוג Publuu
 - Preview ו-Validation לפני שמירת נתוני מקור חיצוני
 - תשתית למקור API חיצוני מובנה
@@ -71,7 +72,8 @@ Routing
   ↓
 Search Tools
   ↓
-Supabase Activities Data
+In-Memory Activities Data
+loaded from Supabase
   ↓
 Response Formatting
   ↓
@@ -163,7 +165,7 @@ User:
 
 8. Search Tools apply the filters
 
-9. Matching activities are returned from Supabase
+9. Search Tools filter the activity data already loaded from Supabase
 
 10. The answer is formatted and sent back through Telegram
 ```
@@ -247,7 +249,6 @@ User:
 - Greeting
 - Thanks
 - Unclear Messages
-- Pagination
 
 הזיכרון המרכזי של השיחה אינו נשמר רק בתוך Telegram.
 
@@ -446,10 +447,10 @@ start_after = 17:00
 - Filtering
 - Matching
 - Sorting
-- Pagination
 - Age matching
 - Result formatting
 
+Pagination של תוצאות נוספות מנוהל בנפרד בשכבת Telegram באמצעות context.user_data.
 ---
 
 # Data Ingestion Pipeline
@@ -516,8 +517,7 @@ Supabase
 
 ה-Agent גם אינו קורא את Publuu בזמן שאלת משתמש.
 
-לאחר שלב ה-Ingestion הפעילויות נשמרות במבנה אחיד ב-Supabase, וה-Agent עובד מול הנתונים שכבר נשמרו.
-
+לאחר שלב ה-Ingestion הפעילויות נשמרות ב-Supabase, נטענות לזיכרון באמצעות reload_data(), וה-Agent מבצע את החיפוש על הנתונים שכבר נטענו לזיכרון.
 ---
 
 ## Document Reader
@@ -713,7 +713,7 @@ unchanged
 
 `admin/app.py`
 
-המערכת כוללת ממשק ניהול מקומי מבוסס Flask.
+המערכת כוללת ממשק ניהול מבוסס Flask, המופעל על שרת Azure ונגיש דרך HTTPS.
 
 הממשק מאפשר למנהל:
 
@@ -749,6 +749,8 @@ admin/templates/external_preview.html
 הממשק פועל בנפרד מממשק התושב ב-Telegram.
 
 כך לוגיקת ניהול הנתונים אינה מעורבת בלוגיקת החיפוש של המשתמש.
+
+בפריסה הנוכחית Flask מאזין פנימית ב-127.0.0.1:5000, ו-Nginx משמש כ-Reverse Proxy עבור גישה חיצונית מאובטחת.
 
 ---
 
@@ -1074,7 +1076,9 @@ community-center-ai-agent/
 | PostgreSQL / psycopg | LangGraph checkpoint storage |
 | Pydantic | Structured output and validation |
 | python-telegram-bot | Telegram interface |
-| Flask | Local Admin interface |
+| Flask | Web-based Admin interface |
+| Microsoft Azure | Linux VM deployment |
+| Nginx | Reverse proxy and HTTPS access |
 | python-dotenv | Environment-variable management |
 | pandas | Data processing |
 | openpyxl | Excel processing |
@@ -1135,14 +1139,12 @@ ADMIN_SESSION_SECRET=
 
 לאחר מכן יש להזין את הערכים המתאימים בקובץ `.env` המקומי.
 
-`EXTERNAL_API_KEY` נדרש רק כאשר המקור החיצוני שבו משתמשים דורש מפתח גישה.
-
+`EXTERNAL_API_KEY` משמש באופן אופציונלי כאשר מקור API חיצוני דורש מפתח גישה.
 `DATABASE_URL` משמש את LangGraph לצורך Persistent Checkpoints.
 
 `SOURCE_BUCKET` מגדיר את מאגר קובצי המקור ב-Supabase Storage.
 
-`ADMIN_PASSWORD` ו-`ADMIN_SESSION_SECRET` משמשים לממשק הניהול המקומי.
-
+`ADMIN_PASSWORD` ו-`ADMIN_SESSION_SECRET` משמשים לאבטחת ממשק הניהול.
 > `.env` אינו מועלה ל-Git.
 
 ---
@@ -1174,6 +1176,9 @@ python -m admin.app
 ```text
 http://127.0.0.1:5000
 ```
+בפריסה הפעילה הממשק זמין גם דרך:
+https://community-center-ai-admin-hk.israelcentral.cloudapp.azure.com
+
 
 ---
 
@@ -1244,6 +1249,23 @@ python -m ingestion.ingest_documents --save
 ```bash
 python -m ingestion.ingest_documents --file "path/to/file.xlsx" --save
 ```
+
+---
+# Deployment
+
+המערכת פרוסה על Microsoft Azure באזור Israel Central ומופעלת על Ubuntu Server 24.04 LTS.
+
+Telegram Bot וממשק הניהול פועלים כשירותי systemd נפרדים, כך שהם עולים אוטומטית עם השרת ומופעלים מחדש במקרה של עצירה.
+
+ממשק הניהול פועל באמצעות Flask, כאשר Nginx משמש כ-Reverse Proxy ומאפשר גישה מאובטחת דרך HTTPS.
+
+Telegram Bot:
+
+https://t.me/community_center_ai_agent_bot
+
+Admin Interface:
+
+https://community-center-ai-admin-hk.israelcentral.cloudapp.azure.com
 
 ---
 
@@ -1373,7 +1395,7 @@ Agent:
 לדוגמה:
 
 ```text
-אני מחפש חוג
+אני רוצה משהו
 ```
 
 במקום לבצע חיפוש שרירותי, LangGraph יכול להעביר את הבקשה למסלול Clarification.
@@ -1482,7 +1504,8 @@ Evaluation
 - זמני התגובה תלויים גם בקריאות למודל השפה
 - המערכת פועלת כיום בתחום החיפוש של פעילויות
 - החיבור למקור API חיצוני הוא תשתית כללית ותלוי במבנה ובאימות של השירות החיצוני
-- ממשק ה-Admin פועל כיום באופן מקומי
+- ממשק ה-Admin מוגן כיום באמצעות סיסמת מנהל אחת ואינו כולל עדיין מערכת הרשאות מרובת משתמשים
+- המערכת פרוסה כיום על מכונה וירטואלית אחת ב-Azure
 - מסלול Publuu הוא מסלול הדגמה לקריאת מקור ציבורי חיצוני ולא מקור הנתונים הראשי
 - חילוץ ממקורות מבוססי תמונה דורש Review ו-Validation לפני שמירה
 
@@ -1505,7 +1528,6 @@ Evaluation
 - תמיכה בשפות נוספות
 - חיבור לספקי מידע חיצוניים נוספים
 - חיבור ערוצי תקשורת נוספים
-- Deployment לסביבת Production
 
 ---
 
@@ -1523,8 +1545,9 @@ The system combines:
 - Supabase / PostgreSQL as the active activity database
 - Supabase Storage for source-file management
 - Telegram for conversational interaction
-
-- Flask for the local Admin interface
+- Flask for the web-based Admin interface
+- Microsoft Azure for Linux VM deployment
+- Nginx for reverse proxy and HTTPS access
 
 The agent supports follow-up questions, persistent context preservation, clarification, spelling variations, multiple search filters and pagination.
 
@@ -1536,12 +1559,14 @@ Excel and structured external API records are adapted to the same Activity schem
 
 Source files can be managed through Supabase Storage, with Add / Replace / Delete synchronization and an automatic background watcher.
 
-The project also includes a local Admin interface for managing source files and external sources.
+The project also includes a web-based Admin interface deployed on Azure and accessible through HTTPS.
 
 A Publuu-based external-source flow demonstrates the ability to read information from a public external source, extract activities from publication pages, review them in a Preview screen and validate them before storing them in Supabase.
 
-The resident-facing Agent does not read Publuu or source files at query time. It searches only the structured activity data already stored in Supabase.
+The resident-facing Agent does not read Publuu or source files at query time. It searches only the structured activity data loaded from Supabase into memory.
 
 The project also includes automated agent evaluation and data-validation tools.
+
+The Telegram Bot and Admin interface are deployed on an Azure Linux VM using systemd, with Nginx providing HTTPS access to the Admin interface.
 
 The architecture is modular and designed so that additional data sources, communication channels, tools and AI capabilities can be integrated in future versions without redesigning the entire system.
